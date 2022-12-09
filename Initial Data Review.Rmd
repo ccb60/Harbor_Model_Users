@@ -1,0 +1,369 @@
+---
+title: "Untitled"
+author: "Curtis C. Bohlen"
+date: "2022-12-07"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:100px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+CBEP recently recieved a grant from NSF's CIVIC Innovation Challenge to work on 
+developing hydrodynamic models that address community needs in Portland Harbor.
+As part of the project, CBEP hosted three community workshops in November of
+2022.
+
+Facilitators produced both "live" notes during the meeting -- visible to all on
+a screen at the front of the meeting room -- and detailed meeting transcripts.
+CBEP staff then reviewed those notes paragraph by paragraph, and coded each 
+paragraph in terms of five characteristics:
+
+*  Potential users and uses of hydrodynamic models,
+
+*  Ideas for improvig communitcations of model results (e.g., communications 
+   channels and user interface design),
+
+*  Data or informaiton needs identified by community members,
+
+*  Implied extensions of the initial Casco BAy Model required to fully address
+   those data needs, and
+
+*  Suggestions about monitotign or data collection that could improve
+   information availability.
+
+Of course, not all paragraphs include information related to each of the five 
+types of informaiton, so there is not a perfect one-to-one correspondence 
+between categories.
+
+In this R Notebook, I explore these data in terms of frequency with which
+certain ideas came up, and cross-correlations among ideas.
+
+# Load Packages
+```{r}
+library(tidyverse)
+library(readxl)
+library(networkD3)
+
+theme_set(theme_classic())
+```
+
+
+# Load Data
+```{r}
+the_data <- read_excel("Export_Data_Query.xlsx" ) %>%
+  mutate(ID = as.integer(ID))
+head(the_data)
+```
+
+Our coding was generated in a somewhat sloppy `Access` database, and because of
+the way SQL works, it is easier to replace numerical values for some groups
+here, in `R`, rather than before we exported the data from `Access`. I read in
+the dictionaries here.
+
+```{r}
+timing_table <- read_excel("Timing Category.xlsx", 
+    col_types = c("numeric", "text", "text"))
+
+data_table <-  read_excel("Data Category.xlsx")
+```
+
+And finally I correct the data table to all text entries.
+
+```{r}
+the_data <- the_data %>%
+  mutate(Data_Timing = timing_table$Timing[match(Data_Timing, timing_table$ID)],
+         Extension_Timing = timing_table$Timing[match(Extension_Timing,
+                                                      timing_table$ID)],
+         Data_Category = if_else(Data_Category==1, "Data Quality", "Data Type"))
+```
+
+#A Warning about Uniqueness
+We have to be careful here, because each note or comment can be represnted in 
+this data table multiple times. Each paragraph in the meeting transcript might 
+imply several different users, for example.  But if there are multipl users and
+multiple data types, the records got duplicated (in part) in the SQL query.  So 
+for any analysis, we need to test for uniqueness of the data. always
+
+We actually have over 400 records, built out of just over 200 unique comments.
+
+```{r}
+cat("All rows in the data:\t\t")
+nrow(the_data)
+
+cat("Unique comments reviewed:\t")
+the_data %>%
+  select(ID) %>%
+  unique() %>%
+  nrow()
+```
+
+# Frequency Tables
+## Users
+```{r}
+tmp <- the_data %>%
+  select(ID, User_Category) %>%
+  unique()
+tst <- xtabs(~User_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique User Records:\t")
+sum(tst$n)
+```
+```{r}
+tst %>%
+  mutate(User_Category = fct_reorder(User_Category, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(User_Category,n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("")
+```
+
+### What are the comments associated with the "Other" Category?
+```{r}
+the_data %>%
+  filter(User_Category == "Other") %>%
+  select(Comment) %>%
+  unique() %>%
+  as.list() %>%
+  unlist
+```
+
+## User Interface Ideas
+```{r}
+tmp <- the_data %>%
+  select(ID, Interface_Category) %>%
+  unique()
+tst <- xtabs(~Interface_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique User Records:\t")
+sum(tst$n)
+```
+```{r}
+tst %>%
+  mutate(Interface_Category = fct_reorder(Interface_Category, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(Interface_Category,n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("")
+```
+
+```{r fig.height = 9, fig.width = 7}
+the_data %>%
+  filter(! is.na(Interface_Category)) %>%
+  unique() %>%
+  mutate(Interface_Group = fct_infreq(Interface_Group),
+         Interface_Category = fct_infreq(Interface_Category)) %>%
+  ggplot(aes(Interface_Group)) +
+  geom_bar(fill = "blue4") +
+  theme(axis.text.y = element_text(size = 7)) +
+  xlab('Count') +
+  ylab("") +
+  coord_flip() +
+  facet_wrap(~Interface_Category, nrow = 3)
+```
+
+## Sankay Plots
+
+We need to create a network data set, which has to identify links between notes
+by `Source`, `Target` and `Value`.
+
+We have a semi-hierarchical network, but we have not structured it that way.
+First, we select, and edit so the "other" categories don't look equivalent.
+```{r}
+tmp <- the_data %>%
+  filter(! is.na(Interface_Category)) %>%
+  select(ID, User_Category, Interface_Category, Interface_Group) %>%
+  mutate(Interface_Category = if_else(Interface_Category == 'Other',
+                                      'Other_Cat', Interface_Category),
+         Interface_Group = if_else(Interface_Group == 'Other',
+                                      'Other_Group', Interface_Group)) %>%
+  unique()
+```
+
+Next, we focus on only the first two layers of this hierarchy or graph.  We 
+collapse down to from and to categories, and calculate  the number of links
+between each pair.
+
+```{r}
+tmp2 <- tmp %>%
+  group_by(User_Category, Interface_Category) %>%
+  summarize(weight = n(), 
+            .groups = 'drop')
+
+nodes <- tibble(node_name = unique(c(tmp2$User_Category,
+                     tmp2$Interface_Category)))
+```
+
+Convert the character string values to zero-valued numerical IDs, as 
+required by the `networkD3` package.
+```{r}
+tmp3 <- tmp2 %>%
+  mutate(User_Category = match(User_Category, nodes$node_name) - 1,
+         Interface_Category = match(Interface_Category, nodes$node_name) - 1)
+
+```
+
+```{r}
+plt <- sankeyNetwork(Links = tmp3,
+             Source = "User_Category",
+             Target = "Interface_Category",
+             Value = "weight",
+             Nodes = nodes,
+             NodeID = "node_name",
+             height = 800,
+             fontSize = 12,
+             iterations = 0)
+plt
+```
+
+```{r}
+saveNetwork(plt, file = 'sankay.html', selfcontained = FALSE)
+```
+
+
+### What are the comments associated with the "Other" Category?
+This is not very helpful, because the insight is in the text I added....
+```{r}
+the_data %>%
+  filter(Interface_Category == "Other") %>%
+  select(Comment) %>%
+  unique() %>%
+  as.list() %>%
+  unlist
+```
+
+
+
+
+## Data Types Requested
+```{r}
+tmp <- the_data %>%
+  filter(Data_Category == "Data Type") %>%
+  select(ID, Data_Group) %>%
+  unique()
+tst <- xtabs(~Data_Group, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Data Records:\t")
+sum(tst$n)
+```
+```{r}
+tst %>%
+  mutate(Data_Group = fct_reorder(Data_Group, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(Data_Group,n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("")
+```
+
+## Data Types Associated with Data QUality Criteria
+```{r}
+tmp <- the_data %>%
+  filter(Data_Category == "Data Quality") %>%
+  select(ID, Data_Group) %>%
+  unique()
+tst <- xtabs(~Data_Group, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Data Records:\t")
+sum(tst$n)
+```
+```{r}
+tst %>%
+  mutate(Data_Group = fct_reorder(Data_Group, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(Data_Group,n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("")
+```
+
+
+### What are the comments associated with Data Quality Criteria?
+This is not very helpful, because the insight is in the text I added, more than 
+in the original comments....
+```{r}
+the_data %>%
+  filter(Data_Category == "Data Quality") %>%
+  select(Data_Group, Comment) %>%
+  unique()
+```
+
+## Extensions
+```{r}
+tmp <- the_data %>%
+  select(ID, Extension_Category) %>%
+  unique()
+tst <- xtabs(~Extension_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Extension Records:\t")
+sum(tst$n)
+```
+
+```{r}
+tst %>%
+  mutate(Extension_Category = fct_reorder(Extension_Category, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(Extension_Category,n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("")
+```
+```{r}
+the_data %>%
+  filter(Extension_Category == "Other") %>%
+  select(Comment) %>%
+  unique()
+```
+
+## Monitoring
+```{r}
+tmp <- the_data %>%
+  select(ID, Extension_Category) %>%
+  unique()
+tst <- xtabs(~Extension_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Extension Records:\t")
+sum(tst$n)
+```
+
+```{r}
+tst %>%
+  mutate(Extension_Category = fct_reorder(Extension_Category, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(Extension_Category,n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("")
+```
