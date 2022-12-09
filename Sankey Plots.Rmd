@@ -295,6 +295,57 @@ saveNetwork(plt, file = 'users and data better.html', selfcontained = TRUE)
 webshot::webshot('users and data better.html', 'users and data better.png')
 ```
 
+### Simplified Graphic
+
+```{r}
+tmp4 <- tmp2 %>%
+  filter(weight > 2) 
+```
+
+```{r}
+types <- unique(as.character(tmp4$Data_Group))
+users <- unique(as.character(tmp4$User_Category))
+
+nodes <- tibble(node_name = c(users, types),
+                groups = c(users,
+                           rep("B", length(types))))
+```
+
+
+```{r}
+tmp5 <- tmp4 %>%
+  mutate(link_group = as.character(User_Category),
+         User_Category = match(User_Category, nodes$node_name) - 1,
+         Data_Group = match(Data_Group, nodes$node_name) - 1)
+```
+
+```{r}
+plt <- sankeyNetwork(Links = tmp5,
+             Source = "User_Category",
+             Target = "Data_Group",
+             Value = "weight",
+             LinkGroup = "link_group",
+             NodeGroup = "groups",
+             Nodes = nodes,
+             NodeID = "node_name",
+             colourScale = the_colors,
+             nodeWidth = 20,
+             nodePadding = 10,
+             height = 700,
+             fontSize = 12,
+             fontFamily = 'Montserrat ExtraBold',
+             iterations = 0)
+plt
+```
+
+
+```{r}
+saveNetwork(plt, file = 'users and data simpler.html', selfcontained = TRUE)
+
+webshot::webshot('users and data simpler.html', 'users and data simpler.png')
+```
+
+
 ## From Data Requests to Time Domain
 ```{r}
 tmp <- the_data %>%
@@ -445,4 +496,60 @@ plt
 saveNetwork(plt, file = 'timing to data.html', selfcontained = TRUE)
 
 webshot::webshot('timing to data.html', 'timing to data.png')
+```
+
+
+
+# Simplified Graphic 
+We generate a graphic where we focus only on links with three or more mentions 
+in the data.
+
+### Graphic
+
+```{r}
+tmp4 <- tmp %>%
+  filter(weight > 2) 
+```
+
+```{r}
+types <- unique(as.character(tmp4$Data_Group))
+timing <- unique(as.character(tmp4$Data_Timing))
+
+nodes <- tibble(node_name = c(timing, types),
+                groups = c(timing,
+                           rep("B", length(types))))
+```
+
+```{r}
+tmp5 <- tmp4 %>%
+  mutate(link_group = as.character(Data_Timing),
+         Data_Timing = match(Data_Timing, nodes$node_name) - 1,
+         Data_Group = match(Data_Group, nodes$node_name) - 1)
+```
+
+```{r}
+plt <- sankeyNetwork(Links = tmp5,
+             Source = "Data_Timing",
+             Target = "Data_Group",
+             Value = "weight",
+             LinkGroup = "link_group",
+             NodeGroup = "groups",
+             Nodes = nodes,
+             NodeID = "node_name",
+             colourScale = the_colors,
+             nodeWidth = 20,
+             nodePadding = 10,
+             height = 700,
+             fontSize = 12,
+             fontFamily = 'Montserrat ExtraBold',
+             iterations = 0)
+plt
+```
+
+
+
+```{r}
+saveNetwork(plt, file = 'timing to data simpler.html', selfcontained = TRUE)
+
+webshot::webshot('timing to data simpler.html', 'timing to data simpler.png')
 ```
