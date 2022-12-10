@@ -1,7 +1,7 @@
 ---
-title: "Untitled"
+title: "Frequency Analysis of Notes From Portland HArbor Model Workshops"
 author: "Curtis C. Bohlen"
-date: "2022-12-07"
+date: "2022-12-09"
 output:
   pdf_document:
     toc: true
@@ -21,7 +21,7 @@ knitr::opts_chunk$set(fig.align = 'center',
 ```
 
 # Introduction
-CBEP recently recieved a grant from NSF's CIVIC Innovation Challenge to work on 
+CBEP recently received a grant from NSF's CIVIC Innovation Challenge to work on 
 developing hydrodynamic models that address community needs in Portland Harbor.
 As part of the project, CBEP hosted three community workshops in November of
 2022.
@@ -29,23 +29,31 @@ As part of the project, CBEP hosted three community workshops in November of
 Facilitators produced both "live" notes during the meeting -- visible to all on
 a screen at the front of the meeting room -- and detailed meeting transcripts.
 CBEP staff then reviewed those notes paragraph by paragraph, and coded each 
-paragraph in terms of five characteristics:
+paragraph in terms of six characteristics:
 
 *  Potential users and uses of hydrodynamic models,
 
-*  Ideas for improvig communitcations of model results (e.g., communications 
+*  Data or information needs identified by community members,
+
+*  Implied extensions of the initial Casco Bay Model required to fully address
+   those data needs, and
+   
+*  Ideas for improving communications of model results (e.g., communications 
    channels and user interface design),
 
-*  Data or informaiton needs identified by community members,
+*  Specifications for model performance or capabilities such as resolution,
+   geographic coverage or ability to conduct simulations.
 
-*  Implied extensions of the initial Casco BAy Model required to fully address
-   those data needs, and
-
-*  Suggestions about monitotign or data collection that could improve
+*  Suggestions about monitoring or data collection that could improve
    information availability.
 
+If a paragraph or live note included something relevant to one or more of
+these categories, we summarized the related idea, and then assigned each
+paragraph or comment to categories. In this way we cn look at what ideas were 
+expressed most commonly during the workshops.
+
 Of course, not all paragraphs include information related to each of the five 
-types of informaiton, so there is not a perfect one-to-one correspondence 
+types of information, so there is not a perfect one-to-one correspondence 
 between categories.
 
 In this R Notebook, I explore these data in terms of frequency with which
@@ -76,8 +84,6 @@ the dictionaries here.
 ```{r}
 timing_table <- read_excel("Timing Category.xlsx", 
     col_types = c("numeric", "text", "text"))
-
-data_table <-  read_excel("Data Category.xlsx")
 ```
 
 And finally I correct the data table to all text entries.
@@ -86,14 +92,13 @@ And finally I correct the data table to all text entries.
 the_data <- the_data %>%
   mutate(Data_Timing = timing_table$Timing[match(Data_Timing, timing_table$ID)],
          Extension_Timing = timing_table$Timing[match(Extension_Timing,
-                                                      timing_table$ID)],
-         Data_Category = if_else(Data_Category==1, "Data Quality", "Data Type"))
+                                                      timing_table$ID)])
 ```
 
 #A Warning about Uniqueness
-We have to be careful here, because each note or comment can be represnted in 
+We have to be careful here, because each note or comment can be represented in 
 this data table multiple times. Each paragraph in the meeting transcript might 
-imply several different users, for example.  But if there are multipl users and
+imply several different users, for example.  But if there are multiple users and
 multiple data types, the records got duplicated (in part) in the SQL query.  So 
 for any analysis, we need to test for uniqueness of the data. always
 
@@ -110,8 +115,7 @@ the_data %>%
   nrow()
 ```
 
-# Frequency Tables
-## Users
+# Users
 ```{r}
 tmp <- the_data %>%
   select(ID, User_Category) %>%
@@ -120,129 +124,24 @@ tst <- xtabs(~User_Category, tmp) %>%
   sort(decreasing = TRUE) %>%
   as_tibble()
 
+
 cat("Number of Unique User Records:\t")
 sum(tst$n)
 ```
-```{r}
+```{r fig.height = 5, fig.width = 5}
 tst %>%
   mutate(User_Category = fct_reorder(User_Category, n, .desc = TRUE)) %>%
   
-  ggplot(aes(User_Category,n)) +
+  ggplot(aes(User_Category, n)) +
   geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25)) +
   ylab('Count') +
-  xlab("")
+  xlab("") +
+  ggtitle('Users')
 ```
 
-### What are the comments associated with the "Other" Category?
-```{r}
-the_data %>%
-  filter(User_Category == "Other") %>%
-  select(Comment) %>%
-  unique() %>%
-  as.list() %>%
-  unlist
-```
-
-## User Interface Ideas
-```{r}
-tmp <- the_data %>%
-  select(ID, Interface_Category) %>%
-  unique()
-tst <- xtabs(~Interface_Category, tmp) %>%
-  sort(decreasing = TRUE) %>%
-  as_tibble()
-
-cat("Number of Unique User Records:\t")
-sum(tst$n)
-```
-```{r}
-tst %>%
-  mutate(Interface_Category = fct_reorder(Interface_Category, n, .desc = TRUE)) %>%
-  
-  ggplot(aes(Interface_Category,n)) +
-  geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
-  ylab('Count') +
-  xlab("")
-```
-
-```{r fig.height = 9, fig.width = 7}
-the_data %>%
-  filter(! is.na(Interface_Category)) %>%
-  unique() %>%
-  mutate(Interface_Group = fct_infreq(Interface_Group),
-         Interface_Category = fct_infreq(Interface_Category)) %>%
-  ggplot(aes(Interface_Group)) +
-  geom_bar(fill = "blue4") +
-  theme(axis.text.y = element_text(size = 7)) +
-  xlab('Count') +
-  ylab("") +
-  coord_flip() +
-  facet_wrap(~Interface_Category, nrow = 3)
-```
-
-## Sankay Plots
-
-We need to create a network data set, which has to identify links between notes
-by `Source`, `Target` and `Value`.
-
-We have a semi-hierarchical network, but we have not structured it that way.
-First, we select, and edit so the "other" categories don't look equivalent.
-```{r}
-tmp <- the_data %>%
-  filter(! is.na(Interface_Category)) %>%
-  select(ID, User_Category, Interface_Category, Interface_Group) %>%
-  mutate(Interface_Category = if_else(Interface_Category == 'Other',
-                                      'Other_Cat', Interface_Category),
-         Interface_Group = if_else(Interface_Group == 'Other',
-                                      'Other_Group', Interface_Group)) %>%
-  unique()
-```
-
-Next, we focus on only the first two layers of this hierarchy or graph.  We 
-collapse down to from and to categories, and calculate  the number of links
-between each pair.
-
-```{r}
-tmp2 <- tmp %>%
-  group_by(User_Category, Interface_Category) %>%
-  summarize(weight = n(), 
-            .groups = 'drop')
-
-nodes <- tibble(node_name = unique(c(tmp2$User_Category,
-                     tmp2$Interface_Category)))
-```
-
-Convert the character string values to zero-valued numerical IDs, as 
-required by the `networkD3` package.
-```{r}
-tmp3 <- tmp2 %>%
-  mutate(User_Category = match(User_Category, nodes$node_name) - 1,
-         Interface_Category = match(Interface_Category, nodes$node_name) - 1)
-
-```
-
-```{r}
-plt <- sankeyNetwork(Links = tmp3,
-             Source = "User_Category",
-             Target = "Interface_Category",
-             Value = "weight",
-             Nodes = nodes,
-             NodeID = "node_name",
-             height = 800,
-             fontSize = 12,
-             iterations = 0)
-plt
-```
-
-```{r}
-saveNetwork(plt, file = 'sankay.html', selfcontained = FALSE)
-```
-
-
-### What are the comments associated with the "Other" Category?
-This is not very helpful, because the insight is in the text I added....
+## What are the comments associated with the "Other" Category?
 ```{r}
 the_data %>%
   filter(Interface_Category == "Other") %>%
@@ -252,13 +151,9 @@ the_data %>%
   unlist
 ```
 
-
-
-
-## Data Types Requested
+# Data Types Requested
 ```{r}
 tmp <- the_data %>%
-  filter(Data_Category == "Data Type") %>%
   select(ID, Data_Group) %>%
   unique()
 tst <- xtabs(~Data_Group, tmp) %>%
@@ -268,53 +163,23 @@ tst <- xtabs(~Data_Group, tmp) %>%
 cat("Number of Unique Data Records:\t")
 sum(tst$n)
 ```
+
 ```{r}
-tst %>%
-  mutate(Data_Group = fct_reorder(Data_Group, n, .desc = TRUE)) %>%
-  
-  ggplot(aes(Data_Group,n)) +
-  geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+tmp %>%
+  filter(! is.na(Data_Group))  %>%
+  mutate(Data_Group = fct_infreq(Data_Group)) %>%
+   
+  ggplot(aes(Data_Group)) +
+  geom_bar(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25)) +
   ylab('Count') +
-  xlab("")
+  xlab("") +
+  ggtitle("Data Types Requested or Implied")
+
 ```
 
-## Data Types Associated with Data QUality Criteria
-```{r}
-tmp <- the_data %>%
-  filter(Data_Category == "Data Quality") %>%
-  select(ID, Data_Group) %>%
-  unique()
-tst <- xtabs(~Data_Group, tmp) %>%
-  sort(decreasing = TRUE) %>%
-  as_tibble()
-
-cat("Number of Unique Data Records:\t")
-sum(tst$n)
-```
-```{r}
-tst %>%
-  mutate(Data_Group = fct_reorder(Data_Group, n, .desc = TRUE)) %>%
-  
-  ggplot(aes(Data_Group,n)) +
-  geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
-  ylab('Count') +
-  xlab("")
-```
-
-
-### What are the comments associated with Data Quality Criteria?
-This is not very helpful, because the insight is in the text I added, more than 
-in the original comments....
-```{r}
-the_data %>%
-  filter(Data_Category == "Data Quality") %>%
-  select(Data_Group, Comment) %>%
-  unique()
-```
-
-## Extensions
+# Model Extensions
 ```{r}
 tmp <- the_data %>%
   select(ID, Extension_Category) %>%
@@ -328,28 +193,158 @@ sum(tst$n)
 ```
 
 ```{r}
-tst %>%
-  mutate(Extension_Category = fct_reorder(Extension_Category, n, .desc = TRUE)) %>%
-  
-  ggplot(aes(Extension_Category,n)) +
-  geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+tmp %>%
+  filter(! is.na(Extension_Category))  %>%
+  mutate(Extension_Category = fct_infreq(Extension_Category)) %>%
+   
+  ggplot(aes(Extension_Category)) +
+  geom_bar(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25)) +
   ylab('Count') +
-  xlab("")
+  xlab("") +
+  ggtitle("Additional Models or Model Extensions Implied")
 ```
+
+## What are the comments associated with the "Other" Category?
 ```{r}
 the_data %>%
   filter(Extension_Category == "Other") %>%
-  select(Comment) %>%
-  unique()
+  select(ID, Comment) %>%
+  unique() 
 ```
 
-## Monitoring
+So the model extensions I classified as "Other" include:
+
+*  Calculating tidal datums at specific locations,
+
+*  Finding ways to model areas at high risk for eutrophication,
+
+* Developing decision support tools for aquaculture siting and 
+  permitting; and 
+  
+*  Modelling impact of rising seas on groundwater. 
+
+Another ambiguous category are the comments I read as implying something that
+would require expanding the capabilities of the model in other ways:
+
+```{r}
+the_data %>%
+  filter(Extension_Category == "Use Capabilities") %>%
+  select(ID, Comment) %>%
+  unique() 
+```
+
+These include:
+
+*  Incorporating sea level rise into forecasts of tidal elevations or
+   tidal datums at habitat restoration locations or locations of vulnerable
+   infrastructure
+  
+*  Developing versions of the model that can be used in a "what if" or 
+   exploratory manner to build shared understanding when seeking policy
+   solutions.
+  
+*  Retention of model output -- at least "now cast" and short-term forecasts -- 
+   to allow forensic analysis of accidents and spills.
+   
+*  Ensure the model or its output can be coordinated with other data and other
+   models.
+   
+*  Using the model to conduct simulations to improve understanding of ocean
+   process and mechanism
+   
+*  Generating "digital twins" of the harbor.  The concept of 
+   a digital twin generally implies the ability to run various kinds of 
+   "what if" analyses.
+
+# User Interface Ideas
 ```{r}
 tmp <- the_data %>%
-  select(ID, Extension_Category) %>%
+  select(ID, Interface_Category) %>%
   unique()
-tst <- xtabs(~Extension_Category, tmp) %>%
+tst <- xtabs(~Interface_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Interface Records:\t")
+sum(tst$n)
+```
+```{r fig.height = 5, fig.width = 5}
+tmp %>%
+  filter(! is.na(Interface_Category))  %>%
+  mutate(Interface_Category = fct_infreq(Interface_Category)) %>%
+   
+  ggplot(aes(Interface_Category)) +
+  geom_bar(fill = "blue4") +
+
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("User Interface or Presentation Ideas")
+```
+
+What kind of things fall into each category?
+```{r fig.width = 7}
+the_data %>%
+  filter(! is.na(Interface_Category)) %>%
+  filter(Interface_Group != "General") %>%
+  unique() %>%
+  mutate(Interface_Group = fct_infreq(Interface_Group),
+         Interface_Category = fct_infreq(Interface_Category)) %>%
+  ggplot(aes(Interface_Group)) +
+  geom_bar(aes(fill = Interface_Category)) +
+  theme(axis.text.x = element_text(angle = 90, size = 10,
+                                   hjust = 1, vjust = 0.25),
+        legend.text = element_text(size=8),
+        legend.key.size = unit(0.5, 'cm'),
+        legend.position="bottom") +
+  scale_fill_viridis_d(name = "") +
+  
+  ylab('Count') +
+  xlab("")
+```
+```{r}
+#ggsave(ggsave('Interface_ideas_bars.png', type='cairo',
+ #        width = 10, height = 5))
+```
+
+# Model Performance Goals
+```{r}
+tmp <- the_data %>%
+  select(ID, Performance_Apply, Performance_Criterion) %>%
+  unique()
+xtabs(~Performance_Criterion + Performance_Apply, data = tmp) %>%
+  as_tibble() %>%
+  pivot_wider(names_from = Performance_Criterion, values_from = n) %>%
+  mutate(row_tot = rowSums(select(., `Accuracy`:`Temporal Resolution`))) %>%
+  arrange(desc(row_tot))
+```
+
+```{r}
+tmp %>%
+  filter(! is.na(Performance_Apply))  %>%
+  mutate(Performance_Apply = fct_infreq(Performance_Apply)) %>%
+  mutate(Performance_Criterion = fct_infreq(Performance_Criterion)) %>%
+   
+  ggplot(aes(Performance_Apply)) +
+  geom_bar(aes(fill = Performance_Criterion)) +
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25)) +
+  scale_fill_viridis_d(name = '') +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("Model Performance Suggestions")
+
+```
+
+# Monitoring Suggestions
+```{r}
+tmp <- the_data %>%
+  select(ID, Monitoring_Data_Group) %>%
+  unique()
+tst <- xtabs(~Monitoring_Data_Group, tmp) %>%
   sort(decreasing = TRUE) %>%
   as_tibble()
 
@@ -358,12 +353,19 @@ sum(tst$n)
 ```
 
 ```{r}
-tst %>%
-  mutate(Extension_Category = fct_reorder(Extension_Category, n, .desc = TRUE)) %>%
-  
-  ggplot(aes(Extension_Category,n)) +
-  geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
+tmp %>%
+  filter(! is.na(Monitoring_Data_Group))  %>%
+  mutate(Monitoring_Data_Group = fct_infreq(Monitoring_Data_Group)) %>%
+   
+  ggplot(aes(Monitoring_Data_Group)) +
+  geom_bar(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25)) +
   ylab('Count') +
-  xlab("")
+  xlab("") +
+  ggtitle("Additional Models or Model Extensions Implied")
+
 ```
+
+
+
