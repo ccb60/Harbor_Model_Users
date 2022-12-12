@@ -1,5 +1,5 @@
 ---
-title: "Untitled"
+title: "Sankay Plots of WOrkshop Comments"
 author: "Curtis C. Bohlen"
 date: "2022-12-07"
 output:
@@ -29,33 +29,41 @@ As part of the project, CBEP hosted three community workshops in November of
 Facilitators produced both "live" notes during the meeting -- visible to all on
 a screen at the front of the meeting room -- and detailed meeting transcripts.
 CBEP staff then reviewed those notes paragraph by paragraph, and coded each 
-paragraph in terms of five characteristics:
+paragraph in terms of six characteristics:
 
 *  Potential users and uses of hydrodynamic models,
-
-*  Ideas for improving communications of model results (e.g., communications 
-   channels and user interface design),
 
 *  Data or information needs identified by community members,
 
 *  Implied extensions of the initial Casco Bay Model required to fully address
    those data needs, and
+   
+*  Ideas for improving communications of model results (e.g., communications 
+   channels and user interface design),
+
+*  Specifications for model performance or capabilities such as resolution,
+   geographic coverage or ability to conduct simulations.
 
 *  Suggestions about monitoring or data collection that could improve
    information availability.
+
+If a paragraph or live note included something relevant to one or more of
+these categories, we summarized the related idea, and then assigned each
+paragraph or comment to categories. In this way we cn look at what ideas were 
+expressed most commonly during the workshops.
 
 Of course, not all paragraphs include information related to each of the five 
 types of information, so there is not a perfect one-to-one correspondence 
 between categories.
 
-In this R Notebook, I explore these data in terms of frequency with which
-certain ideas came up, and cross-correlations among ideas.
+In this R Notebook, I explore these data principally by looking at 
+cross-correlations among ideas in the different categories.
 
 # Load Packages
 ```{r}
 library(tidyverse)
 library(readxl)
-library(networkD3)
+library(networkD3)  #an alternative might be the riverplot package
 
 theme_set(theme_classic())
 ```
@@ -107,52 +115,54 @@ the_data %>%
   nrow()
 ```
 
-# Frequency Tables
-## Users
-```{r}
-tmp <- the_data %>%
-  select(ID, User_Category) %>%
-  unique()
-tst <- xtabs(~User_Category, tmp) %>%
-  sort(decreasing = TRUE) %>%
-  as_tibble()
+# Sankay Plot Methods
 
-cat("Number of Unique User Records:\t")
-sum(tst$n)
-```
-```{r}
-tst %>%
-  filter(User_Category != "Not Specified") %>%
-  mutate(User_Category = fct_reorder(User_Category, n, .desc = TRUE)) %>%
-  
-  ggplot(aes(User_Category,n)) +
-  geom_col(fill = "blue4") +
-  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.25)) +
-  ylab('Count') +
-  xlab("")
-```
-
-# Sankay Plot
-## From Users to Data Requests
 We need to create a network data set, which has to identify links between notes
-by `Source`, `Target` and `Value`.
+by `Source`, `Target` and `Value`.  The `sankeyNetwork()` function from the 
+`networkD3` package on which we rely wants the data in a very specific format. 
 
-We have a semi-hierarchical network, but we have not structured it the way the
-Sankay chart function wants.  We need to do some data wrangling.
+*  It wants to define NODES via a data frame of node labels (and, optionally,
+   node groups that can be used to assign colors to nodes).
 
-First, we select the user and data information, and edit so names don't don't 
-look equivalent.
+*  It wants to define links via a data frame containing NUMERIC (integer?)
+   values identifying nodes. The data frame can also include data on link groups
+   for assigning colors to links.
+
+*  The integers defining each node must match the order of those
+   nodes in the nodes data frame.  
+
+## Data Wrangling
+For clarity, I break the data wrangling up into discrete steps. That simplifies 
+both explanation and checking intermediate results.  
+
+First, we select the user and data information. 
+
+We are headed for a display that shown User or Use groups on the left, and Data
+groups on the right.  Both User and Data classifications included a category
+called simply "Other", for comments that clearly articulated a data request that 
+I could not figure out how to categorize.  
+
+Sankey plots need not be unidirectional, so logically, nodes are neither
+sources nor targets.  If I use the same name for both the "User Other" and the
+"Data Other" categories, the package sees them as the same category, which has
+unintended effects on plot geometry (since we can then have "Other" as either or
+both a source or a target.
+
+TO avoid that problem, we have to edit the category names so the two "Other"
+categories don't look equivalent.
+
+Finally, we convert the (string) data to factors, and sort them in decreasing 
+order of frequency, which may help with later graphic design.
 
 ```{r}
 tmp <- the_data %>%
   select(ID, User_Category, Data_Group) %>%
   filter(! is.na(User_Category)) %>%
   filter(! is.na(Data_Group)) %>%
-  filter(User_Category != "Not Specified") %>%
   mutate(User_Category = if_else(User_Category == 'Other',
-                                      'Other_User', User_Category),
+                                      'Other User', User_Category),
          Data_Group = if_else(Data_Group == 'Other',
-                                      'Other_Data',Data_Group)) %>%
+                                      'Other Data',Data_Group)) %>%
   mutate(User_Category = if_else(User_Category == 'Water Quality',
                                       'Water Quality User', User_Category),
          Data_Group = if_else(Data_Group == 'Water Quality',
@@ -162,7 +172,7 @@ tmp <- the_data %>%
   unique()
 ```
 
-We and calculate  the number of links between each pair of "before" and "after"
+We next calculate the number of links between each pair of source and target
 nodes.
 
 ```{r}
@@ -173,8 +183,8 @@ tmp2 <- tmp %>%
 ```
 
 
-I do some fancy footwork to be able to control colors in the final version of 
-the diagram.
+I add a `groups` variable, to allow me to control the color of the source and 
+target nodes in the diagram.
 
 ```{r}
 nodes <- tibble(node_name = c(unique(tmp2$User_Category),
@@ -183,8 +193,11 @@ nodes <- tibble(node_name = c(unique(tmp2$User_Category),
                            rep("B", length(unique(c(tmp2$Data_Group))))))
 ```
 
-Then we have to convert the character string values to zero-valued numerical 
-IDs, as required by the `networkD3` package.
+Then we have to convert the character string values in our links data frame 
+(`tmp2`) to zero-valued numerical IDs, as required by the `networkD3` package. 
+
+`match()` here is a quick way of implicitly extracting the row number of a 
+matching record from each vector (column) in the `tmp2` data frame.
 
 ```{r}
 tmp3 <- tmp2 %>%
@@ -194,7 +207,7 @@ tmp3 <- tmp2 %>%
 
 ```
 
-### Draft Graphic
+## Initial Graphic
 ```{r}
 plt <- sankeyNetwork(Links = tmp3,
              Source = "User_Category",
@@ -202,52 +215,66 @@ plt <- sankeyNetwork(Links = tmp3,
              Value = "weight",
              Nodes = nodes,
              NodeID = "node_name",
+             NodeGroup = 'groups',
              height = 800,
-             fontSize = 12,
+             fontSize = 16,
              iterations = 0)
 plt
 ```
 
-```{r}
-saveNetwork(plt, file = 'users and data.html', selfcontained = TRUE)
-```
+## Custom Colors
+It might be nice to color the nodes or links according to categories.
+This is surprisingly difficult, because the package uses one color scale for 
+both notes and links. 
 
-```{r}
-webshot::webshot('users and data.html', 'users and data.png')
-```
+I found it hard to figure out how colors were ordered, and then found it hard to
+assemble the correct color specification as required for `network3D`.
 
-### Custom Colors
-It might be nice to color the nodes or links according to certain categories.
-This is surprisingly difficult, because the package uses one color scale for both
-notes and links.
+I generate new node group names.  For the "Source" nodes, we use the name of the 
+user category.  For the "Target" nodes, we use an arbitrary string, here `"B"`.
 
-I generate new node group names.
 ```{r}
 users <- as.character(levels(tmp2$User_Category))
+types <- as.character(levels(tmp2$Data_Group))
 
-nodes <- tibble(node_name = c(users,
-                              as.character(levels(tmp2$Data_Group))),
+nodes <- tibble(node_name = c(users, types),
                 groups = c(users,
                            rep("B", length(unique(c(tmp2$Data_Group))))))
 ```
 
-And specify matching color groups for the left hand nodes.
+We want the links to match the color of the source nodes, so we  specify
+matching color group names for links based on the source (here, left hand) 
+nodes.
+
 ```{r}
 tmp3 <- tmp2 %>%
   mutate(link_group = as.character(User_Category),
          User_Category = match(User_Category, nodes$node_name) - 1,
          Data_Group = match(Data_Group, nodes$node_name) - 1)
-
 ```
 
-Now I have to define my color palette.  This is some sort of web-based color
-palette definition....  I randomize color order to minimize conflict with
-adjacent nodes.
+Now I have to define my color palette.  This is more work than it should be
+because you have to encapsulate a D3 graphics command in a string so that
+the `sankeyNetwork()` function can pass it on to the underlying Java / D3
+code.
+
+The command requires you to define the names and the colors together as the 
+domain and range of the palette.
+
+I randomize color order to minimize conflict with adjacent nodes. I specify the
+last color -- for the right hand nodes -- as a medium gray.
 
 ```{r}
 domain = c(users, "B")
-range = sample(hcl.colors(15, palette = "viridis"), 15, replace = FALSE)
+(grps <- length(domain))
+range <- sample(hcl.colors(15, palette = "viridis"), grps - 1, replace = FALSE)
+range <- c(range,"#9090c0")
+range
 ```
+
+In the next step I build a data frame containing the domain and range. It is 
+probably not strictly necessary, but it did avoid some odd artifacts with 
+escaped quotes.
 
 ```{r}
 cols <- tibble(d = domain, r = range)
@@ -255,10 +282,10 @@ cols
 ```
 
 The colors are assembles as a string, which takes some fussy work to do 
-programmatically.
+programmatically using `paste()`. Basically, I concatenate the text needed for
+the D3 function call with the lists of domain and range I just built.
 
 ```{r}
-                  
 the_colors <- paste0('d3.scaleOrdinal() .domain(["', 
                      paste(cols$d, collapse='", "'), 
                      '"]) .range(["',
@@ -281,21 +308,22 @@ plt <- sankeyNetwork(Links = tmp3,
              nodeWidth = 20,
              nodePadding = 10,
              height = 700,
-             fontSize = 12,
+             fontSize = 16,
              fontFamily = 'Montserrat ExtraBold',
              iterations = 0)
 plt
 ```
 
-```{r}
-saveNetwork(plt, file = 'users and data better.html', selfcontained = TRUE)
-```
 
-```{r}
-webshot::webshot('users and data better.html', 'users and data better.png')
-```
+## Simplified Graphic
+That graphic looks like a bowl of spaghetti.  Most connections represent only
+one mention during the workshops.  Since the data is based on both the live
+notes and the later transcript, one mention could show up either once or twice
+in my classification of the notes.
 
-### Simplified Graphic
+So, what I want to do is simplify the data by hiding all those "once or twice"
+links.  It turns out if you drop rare links, a few nodes are never linked, so
+I want to drop them too.
 
 ```{r}
 tmp4 <- tmp2 %>%
@@ -310,7 +338,6 @@ nodes <- tibble(node_name = c(users, types),
                 groups = c(users,
                            rep("B", length(types))))
 ```
-
 
 ```{r}
 tmp5 <- tmp4 %>%
@@ -332,7 +359,7 @@ plt <- sankeyNetwork(Links = tmp5,
              nodeWidth = 20,
              nodePadding = 10,
              height = 700,
-             fontSize = 12,
+             fontSize = 16,
              fontFamily = 'Montserrat ExtraBold',
              iterations = 0)
 plt
@@ -345,84 +372,255 @@ saveNetwork(plt, file = 'users and data simpler.html', selfcontained = TRUE)
 webshot::webshot('users and data simpler.html', 'users and data simpler.png')
 ```
 
+# Functions for Generating the Graphics
+I develop three functions to encapsulate all of that logic.  All three are local
+utility functions, so I eschew error checking.  The three functions are:
 
-## From Data Requests to Time Domain
+1.  A function to assemble the `D3` color function call
+
+2. A function to convert our source data frames, with a column of source and 
+target names, into the format required by `sankeyNetwork()`.
+
+3.  A function that actually generates the Sankey Plot (and calls the other two 
+functions).
+
+## Define Color String
+This function could be generalized to allow automated dropping of weak links.
+
+```{r}
+d3_colors <- function(left_names, right_name, final_color = NULL) {
+  #left_names is a vector of string node labels used for the source nodes.
+  #right.name is the name for the (single) target node group.
+  #final_color is a string defining a color for the right (target) nodes.
+  
+  domain = c(left_names, right_name)
+  grps <- length(left_names) + 1
+  #browser()
+  if(! is.null(final_color)) {
+    range <- sample(hcl.colors(grps-1, palette = "viridis"), grps - 1, replace = FALSE)
+    range <- c(range,final_color)
+  }
+  else
+    #print(grps)
+    range <- sample(hcl.colors(grps, palette = "viridis"), grps, replace = FALSE)
+  cols <- tibble(d = domain, r = range)
+  the_colors <- paste0('d3.scaleOrdinal() .domain(["', 
+                       paste(cols$d, collapse='", "'), 
+                       '"]) .range(["',
+                       paste(cols$r, collapse='", "'),
+                       '"])')
+  return(the_colors)
+}
+```
+
+```{r}
+d3_colors(c("cat", "dog", "squirrel"), "foods", "#ffffff")
+```
+
+
+## Assemble the Nodes and Links Data Frames
+We have to be able to filter the data to remove rare 
+I'm going to forego error checking here and keep this as simple as possible...
+```{r}
+assemble_frames <- function(.dat, .left, .right, 
+                            right_name = 'right') {
+  # .data is the RAW data with left-right string pairs (in two variables) that
+  #  show a link between source (.left) and target (.right).
+  
+  grouped <- .dat %>%
+    group_by({{ .left}}, {{.right}}) %>%
+    summarize(weight = n(), 
+              .groups = 'drop')
+  
+  # browser()
+  # there is probably a more efficient way to extract labels, that avoids
+  # building an unnecessary data frame, but this works, and lets me use tidyverse 
+  # indirection....
+  
+  labs <- grouped %>%
+    mutate(left = factor({{ .left}}),
+           right = factor({{.right}}))
+  
+  #I can ignore order here because the Sankey function does....
+  # By calling `factor()` here, it re-levels and drops empty categories.
+  left = levels(factor(labs$left))
+  right = levels(factor(labs$right))
+  rm(labs)
+  
+  nodes <- tibble(node_name = c(left, right),
+                  groups = c(left,
+                             rep(right_name, length(right))))
+  links <- grouped %>%
+    mutate(link_group = as.character({{.left}}),
+           "{{.left}}" := match({{.left}}, nodes$node_name) - 1,
+           "{{.right}}":= match({{.right}}, nodes$node_name) - 1)
+  
+  return(list(Nodes = as.data.frame(nodes), Links = as.data.frame(links)))
+}
+```
+
+```{r}
+test <- tmp %>%
+  assemble_frames(User_Category, Data_Group, 'bicycle')
+```
+
+```{r}
+test$Nodes[10:20,]
+```
+
+```{r}
+head(test$Links,5)
+```
+
+## Draw Sankey Plot
+This encapsulates data frame preparation, color assignment and my selected plot
+characteristics.
+
+```{r}
+my_sankey <- function(.dat, .left, .right,
+                      final_color = NULL, drop_below = NULL) {
+
+  right_name <- 'right'
+  left_str <- as.character(ensym(.left))
+  right_str <- as.character(ensym(.right))
+  
+  if (! is.null(drop_below)) {
+    .dat <- .dat %>%
+      group_by({{.left}}, {{.right}}) %>%
+      mutate(links = n()) %>%
+      filter(links >= drop_below)%>%
+      select(-links)
+  }
+  
+  my_data <- assemble_frames(.dat, {{.left}}, {{.right}},
+                             right_name = right_name)
+  
+  left <- my_data$Links %>%
+    mutate(left = as.character(link_group)) %>%
+    pull(left)
+  left <- unique(as.character(left))
+
+  the_colors <- d3_colors(left, right_name = right_name, 
+                          final_color = final_color)
+  #browser()
+  the_graphic <- sankeyNetwork(Links = my_data$Links,
+             Source = left_str,
+             Target = right_str,
+             Value = "weight",
+             LinkGroup = "link_group",
+             NodeGroup = "groups",
+             Nodes = my_data$Nodes,
+             NodeID = "node_name",
+             colourScale = the_colors,
+             nodeWidth = 20,
+             nodePadding = 10,
+             height = 700,
+             fontSize = 16,
+             fontFamily = 'Montserrat ExtraBold',
+             iterations = 0)
+  
+ return(the_graphic)
+}
+```
+
+
+# From User to Data Types
+## Full Data
+Based on data organized previously.
+
+```{r}
+plt <- tmp %>%
+  my_sankey(User_Category, Data_Group, final_color ="#9090a0")
+```
+
+```{r}
+plt
+```
+
+```{r}
+saveNetwork(plt, file = 'users and data.html', selfcontained = TRUE)
+webshot::webshot('users and data.html', 'users and data.png')
+```
+
+
+## Simplified Plot
+```{r}
+plt <- tmp %>%
+  my_sankey(User_Category, Data_Group, final_color ="#9090a0", drop_below = 3)
+```
+
+
+```{r}
+plt
+```
+
+```{r}
+saveNetwork(plt, file = 'users and data simple.html', selfcontained = TRUE)
+webshot::webshot('users and data simple.html', 'users and data simple.png')
+```
+
+
+# From User to Model Extnsions
+## Full Data
+
+```{r}
+tmp <- the_data %>%
+  select(ID, User_Category, Extension_Category) %>%
+  filter(! is.na(User_Category)) %>%
+  filter(! is.na(Extension_Category)) %>%
+  mutate(User_Category = if_else(User_Category == 'Other',
+                                      'Other User', User_Category),
+         Extension_Category = if_else(Extension_Category == 'Other',
+                                      'Other Model',Extension_Category)) %>%
+  mutate(User_Category = fct_infreq(User_Category),
+         Data_Group = fct_infreq(Extension_Category)) %>%
+  unique()
+```
+
+```{r}
+plt <- tmp %>%
+  my_sankey(User_Category, Extension_Category, final_color ="#9090a0")
+plt
+```
+
+```{r}
+saveNetwork(plt, file = 'users and models.html', selfcontained = TRUE)
+webshot::webshot('users and models.html', 'users and models.png')
+```
+
+
+## Simplified Plot
+```{r}
+plt <- tmp %>%
+  my_sankey(User_Category, Extension_Category, final_color ="#9090a0", drop_below = 3)
+
+plt
+```
+
+```{r}
+saveNetwork(plt, file = 'users and models simple.html', selfcontained = TRUE)
+webshot::webshot('users and models simple.html', 'users and data simple.png')
+```
+
+# From Data Requests to Time Domain
+## Full Data
 ```{r}
 tmp <- the_data %>%
   select(ID, Data_Group, Data_Timing) %>%
   filter(! is.na(Data_Timing)) %>%
   filter(! Data_Timing == "Unclear or Unknown") %>%
   filter(! is.na(Data_Group)) %>%
-  mutate(Data_Timing = if_else(Data_Timing == 'Other',
-                                      'Other_Timing', Data_Timing),
-         Data_Group = if_else(Data_Group == 'Other',
-                                      'Other_Data',Data_Group)) %>%
-  mutate(Data_Timing = fct_infreq(Data_Timing),
+    mutate(Data_Timing = fct_infreq(Data_Timing),
          Data_Group = fct_infreq(Data_Group)) %>%
-  unique() %>%
-  group_by(Data_Group, Data_Timing) %>%
-  summarize(weight = n(), 
-            .groups = 'drop')
+  unique()
 ```
 
-I generate new node group names.
 ```{r}
-types <- as.character(levels(tmp$Data_Group))
-timing <- as.character(levels(tmp$Data_Timing))
-
-nodes <- tibble(node_name = c(types, timing),
-                groups = c(types,
-                           rep("B", length(timing))))
-```
-
-And specify matching color groups for the left hand nodes. (Zero indexed.)
-```{r}
-tmp3 <- tmp %>%
-  mutate(link_group = as.character(Data_Group),
-         Data_Timing = match(Data_Timing, nodes$node_name) - 1,
-         Data_Group = match(Data_Group, nodes$node_name) - 1)
-```
-
-Now I have to define my color palette.  This is some sort of web-based color
-palette definition....
-
-```{r}
-domain = c(types, "B")
-range = sample(hcl.colors(15, palette = "viridis"), 15, replace = FALSE)
-cols <- tibble(d = domain, r = range)
-```
-
-The colors are assembles as a string, which takes some fussy work to do 
-programmatically.
-
-```{r}
-the_colors <- paste0('d3.scaleOrdinal() .domain(["', 
-                     paste(cols$d, collapse='", "'), 
-                     '"]) .range(["',
-                      paste(cols$r, collapse='", "'),
-                     '"])')
-cat(the_colors)
-```
-
-### Graphic
-```{r}
-plt <- sankeyNetwork(Links = tmp3,
-             Source = "Data_Group",
-             Target = "Data_Timing",
-             Value = "weight",
-             LinkGroup = "link_group",
-             NodeGroup = "groups",
-             Nodes = nodes,
-             NodeID = "node_name",
-             colourScale = the_colors,
-             nodeWidth = 20,
-             nodePadding = 10,
-             height = 700,
-             fontSize = 12,
-             fontFamily = 'Montserrat ExtraBold',
-             iterations = 0)
+plt <- tmp %>%
+  my_sankey(Data_Group, Data_Timing, final_color ="#9090a0")
 plt
 ```
+
 
 
 ```{r}
@@ -431,66 +629,26 @@ saveNetwork(plt, file = 'data to timing.html', selfcontained = TRUE)
 webshot::webshot('data to timing.html', 'data to timing.png')
 ```
 
-
-## From Time Domain to Data Requests
-
+## Simplified Plot
 ```{r}
-types <- as.character(levels(tmp$Data_Group))
-timing <- as.character(levels(tmp$Data_Timing))
-
-nodes <- tibble(node_name = c(timing, types),
-                groups = c(timing,
-                           rep("B", length(types))))
-```
-
-And specify matching color groups for the left hand nodes. (Zero indexed.)
-```{r}
-tmp3 <- tmp %>%
-  mutate(link_group = as.character(Data_Timing),
-         Data_Timing = match(Data_Timing, nodes$node_name) - 1,
-         Data_Group = match(Data_Group, nodes$node_name) - 1)
-```
-
-Now I have to define my color palette.
-
-```{r}
-domain = c(timing, "B")
-range = hcl.colors(7, palette = "viridis")
-cols <- tibble(d = domain, r = range)
-```
-
-The colors are assembles as a string, which takes some fussy work to do 
-programmatically.
-
-```{r}
-the_colors <- paste0('d3.scaleOrdinal() .domain(["', 
-                     paste(cols$d, collapse='", "'), 
-                     '"]) .range(["',
-                      paste(cols$r, collapse='", "'),
-                     '"])')
-cat(the_colors)
-```
-
-### Graphic
-```{r}
-plt <- sankeyNetwork(Links = tmp3,
-             Source = "Data_Timing",
-             Target = "Data_Group",
-             Value = "weight",
-             LinkGroup = "link_group",
-             NodeGroup = "groups",
-             Nodes = nodes,
-             NodeID = "node_name",
-             colourScale = the_colors,
-             nodeWidth = 20,
-             nodePadding = 10,
-             height = 700,
-             fontSize = 12,
-             fontFamily = 'Montserrat ExtraBold',
-             iterations = 0)
+plt <- tmp %>%
+  my_sankey(Data_Group, Data_Timing, final_color ="#9090a0", drop_below = 3)
 plt
 ```
 
+```{r}
+saveNetwork(plt, file = 'data to timing simple.html', selfcontained = TRUE)
+
+webshot::webshot('data to timing simple.html', 'data to timing simple.png')
+```
+
+# From Time Domain to Data Requests
+## Full Data
+```{r}
+plt <- tmp %>%
+  my_sankey(Data_Timing, Data_Group, final_color ="#9090a0")
+plt
+```
 
 ```{r}
 saveNetwork(plt, file = 'timing to data.html', selfcontained = TRUE)
@@ -499,57 +657,18 @@ webshot::webshot('timing to data.html', 'timing to data.png')
 ```
 
 
-
-# Simplified Graphic 
-We generate a graphic where we focus only on links with three or more mentions 
-in the data.
-
-### Graphic
-
+## Simplified Plot 
 ```{r}
-tmp4 <- tmp %>%
-  filter(weight > 2) 
-```
-
-```{r}
-types <- unique(as.character(tmp4$Data_Group))
-timing <- unique(as.character(tmp4$Data_Timing))
-
-nodes <- tibble(node_name = c(timing, types),
-                groups = c(timing,
-                           rep("B", length(types))))
-```
-
-```{r}
-tmp5 <- tmp4 %>%
-  mutate(link_group = as.character(Data_Timing),
-         Data_Timing = match(Data_Timing, nodes$node_name) - 1,
-         Data_Group = match(Data_Group, nodes$node_name) - 1)
-```
-
-```{r}
-plt <- sankeyNetwork(Links = tmp5,
-             Source = "Data_Timing",
-             Target = "Data_Group",
-             Value = "weight",
-             LinkGroup = "link_group",
-             NodeGroup = "groups",
-             Nodes = nodes,
-             NodeID = "node_name",
-             colourScale = the_colors,
-             nodeWidth = 20,
-             nodePadding = 10,
-             height = 700,
-             fontSize = 12,
-             fontFamily = 'Montserrat ExtraBold',
-             iterations = 0)
+plt <- tmp %>%
+  my_sankey(Data_Timing, Data_Group, final_color ="#9090a0", drop_below = 3)
 plt
 ```
 
-
-
 ```{r}
-saveNetwork(plt, file = 'timing to data simpler.html', selfcontained = TRUE)
+saveNetwork(plt, file = 'timing to data simple.html', selfcontained = TRUE)
 
-webshot::webshot('timing to data simpler.html', 'timing to data simpler.png')
+webshot::webshot('timing to data simple.html', 'timing to data simple.png')
 ```
+
+
+
