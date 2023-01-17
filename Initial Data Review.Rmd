@@ -1,0 +1,439 @@
+---
+title: "Frequency Analysis of Notes From Portland Harbor Model Workshops"
+author: "Curtis C. Bohlen"
+date: "2022-12-09"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:100px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+CBEP recently received a grant from NSF's CIVIC Innovation Challenge to work on 
+developing hydrodynamic models that address community needs in Portland Harbor.
+As part of the project, CBEP hosted three community workshops in November of
+2022.
+
+Facilitators produced both "live" notes during the meeting -- visible to all on
+a screen at the front of the meeting room -- and detailed meeting transcripts.
+CBEP staff then reviewed those notes paragraph by paragraph, and coded each 
+paragraph in terms of six characteristics:
+
+*  Potential users and uses of hydrodynamic models,
+
+*  Data or information needs identified by community members,
+
+*  Implied extensions of the initial Casco Bay Model required to fully address
+   those data needs, and
+   
+*  Ideas for improving communications of model results (e.g., communications 
+   channels and user interface design),
+
+*  Specifications for model performance or data criteria such as resolution,
+   geographic coverage or ability to conduct simulations.
+
+*  Suggestions about monitoring or data collection that could improve
+   information availability.
+
+If a paragraph or live note included something relevant to one or more of
+these categories, we summarized the related idea, and then assigned each
+paragraph or comment to categories. In this way we can look at what ideas were 
+expressed most commonly during the workshops.
+
+Of course, not all paragraphs include information related to each of the six 
+types of information, so there is not a perfect one-to-one correspondence 
+between categories.
+
+In this R Notebook, I explore these data in terms of frequency with which
+certain ideas came up, and cross-correlations among ideas.
+
+# Load Packages
+```{r}
+library(tidyverse)
+library(ggmosaic)
+library(readxl)
+library(networkD3)
+
+theme_set(theme_classic())
+```
+
+# Create Figures Folder
+```{r}
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+
+# Load Data
+```{r}
+the_data <- read_excel("Data_Export_Query.xlsx" ) %>%
+  mutate(ID = as.integer(ID)) %>%
+  rename_with(function(x) sub(" Category_Category", '_Category', x)) %>%
+  rename_with(function(x) sub(" ", '_', x))
+head(the_data)
+```
+
+Our coding was generated in a somewhat sloppy `Access` database, and because of
+the way SQL works, it is easier to replace numerical values for some groups
+here, in `R`, rather than before we exported the data from `Access`. I read in
+the dictionaries here.
+
+```{r}
+timing_table <- read_excel("Timing Category.xlsx", 
+    col_types = c("numeric", "text", "text"))
+data_types_table <- read_excel("Data Type.xlsx", 
+    col_types = c("numeric", "text", "text"))
+```
+
+##  Numerical Values to Strings
+And finally I correct the data table to all text entries.
+```{r}
+the_data <- the_data %>%
+  mutate(Data_Timing = timing_table$Timing[match(Data_Timing, 
+                                                 timing_table$ID)],
+         Extension_Timing = timing_table$Timing[match(Extension_Timing,
+                                                      timing_table$ID)],
+         Data_Quality_Timing = timing_table$Timing[match(Data_Quality_Timing,
+                                                      timing_table$ID)]) %>%
+  mutate(Monitoring_Data_Group = data_types_table$Group[match(Monitoring_Data_Group,
+                                                    data_types_table$ID)],
+         Data_Quality_Type = data_types_table$Group[match(Data_Quality_Type,
+                                                    data_types_table$ID)])
+```
+
+
+```{r}
+the_data %>%
+  filter(! is.na(Monitoring_Data_Group)) %>%
+  select(contains("Monitoring"))
+```
+
+
+
+#A Warning about Uniqueness
+We have to be careful here, because each note or comment can be represented in 
+this data table multiple times. Each paragraph in the meeting transcript might 
+imply several different users, for example.  But if there are multiple users and
+multiple data types, the records got duplicated (in part) in the SQL query.  So 
+for any analysis, we need to test for uniqueness of the data. always
+
+We actually have over 375 records, built out of just over 200 unique comments.
+
+```{r}
+cat("All rows in the data:\t\t")
+nrow(the_data)
+
+cat("Unique comments reviewed:\t")
+the_data %>%
+  select(ID) %>%
+  unique() %>%
+  nrow()
+```
+
+# Users
+```{r}
+tmp <- the_data %>%
+  select(ID, User_Category) %>%
+  unique()
+tst <- xtabs(~User_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+
+cat("Number of Unique User Records:\t")
+sum(tst$n)
+```
+```{r fig.height = 5, fig.width = 5}
+tst %>%
+  mutate(User_Category = fct_reorder(User_Category, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(User_Category, n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("") +
+  ggtitle('Users')
+```
+
+```{r}
+ggsave('figures/users.png', type='cairo',
+         width = 6, height = 6)
+```
+
+# Data Types Requested
+```{r}
+tmp <- the_data %>%
+  select(ID, Data_Group) %>%
+  unique()
+tst <- xtabs(~Data_Group, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Data Records:\t")
+sum(tst$n)
+```
+
+```{r fig.height = 5, fig.width = 5}
+tmp %>%
+  filter(! is.na(Data_Group))  %>%
+  mutate(Data_Group = fct_infreq(Data_Group)) %>%
+   
+  ggplot(aes(Data_Group)) +
+  geom_bar(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("Data Types Requested or Implied")
+
+```
+
+```{r}
+ggsave('figures/data.png', type='cairo',
+         width = 6, height = 6)
+```
+
+# Model Extensions
+```{r}
+tmp <- the_data %>%
+  select(ID, Extension_Category) %>%
+  unique()
+tst <- xtabs(~Extension_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Extension Records:\t")
+sum(tst$n)
+```
+
+```{r fig.height = 5, fig.width = 5}
+tmp %>%
+  filter(! is.na(Extension_Category))  %>%
+  mutate(Extension_Category = fct_infreq(Extension_Category)) %>%
+   
+  ggplot(aes(Extension_Category)) +
+  geom_bar(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("Additional Models or Model Extensions Implied")
+```
+
+```{r}
+ggsave('figures/models.png', type='cairo',
+         width = 6, height = 6)
+```
+
+## What are the comments associated with the "Other" Category?
+```{r}
+the_data %>%
+  filter(Extension_Category == "Other") %>%
+  select(ID, Comment) %>%
+  unique()%>%
+  pull(Comment)
+```
+
+So the model extensions I classified as "Other" include:
+* Developing decision support tools for aquaculture siting and 
+  permitting; and 
+  
+*  Modelling impact of rising seas on groundwater. 
+
+# User Interface Ideas
+```{r}
+tmp <- the_data %>%
+  select(ID, Interface_Category) %>%
+  unique()
+tst <- xtabs(~Interface_Category, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Interface Records:\t")
+sum(tst$n)
+```
+
+```{r fig.height = 5, fig.width = 5}
+tmp %>%
+  filter(! is.na(Interface_Category))  %>%
+  mutate(Interface_Category = fct_infreq(Interface_Category)) %>%
+   
+  ggplot(aes(Interface_Category)) +
+  geom_bar(fill = "blue4") +
+
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("User Interface or Presentation Ideas")
+```
+
+```{r}
+ggsave('figures/interfaces.png', type='cairo',
+         width = 6, height = 6)
+```
+
+## What are the comments associated with the "Other" Category?
+```{r}
+the_data %>%
+  filter(Interface_Category == "Other") %>%
+  select(Comment) %>%
+  unique() %>%
+  pull()
+```
+
+# Data Quality or Model Performance Goals
+
+```{r}
+tmp <- the_data %>%
+  select(ID, Data_Quality_Category, Data_Quality_Type, Data_Quality_Timing) %>%
+  unique() %>%
+  filter(if_any(starts_with('Data_'), ~!is.na(.)))
+
+xtabs(~  Data_Quality_Type + Data_Quality_Category, data = tmp) %>%
+  as_tibble() %>%
+  pivot_wider(names_from = Data_Quality_Type, values_from = n) %>%
+  mutate(row_tot = rowSums(select(., `Inundation`:`Waves`))) %>%
+  arrange(desc(row_tot)) %>%
+  knitr::kable()
+```
+
+In initial draft graphics, the "timimg" category is important, but confusing
+because it also occurs as a separate category.
+
+
+```{r}
+tmp <- the_data %>%
+  select(ID, Data_Quality_Category, Data_Quality_Type, Data_Quality_Timing) %>%
+  unique() %>%
+  filter(if_any(starts_with('Data_'), ~!is.na(.))) %>%
+  filter(! is.na(Data_Quality_Category),
+           Data_Quality_Category != "Timing" )  %>%
+  mutate(Data_Quality_Category = fct_infreq(Data_Quality_Category),
+         Data_Quality_Type = fct_infreq(Data_Quality_Type),
+         Data_Quality_Timing = fct_infreq(Data_Quality_Timing))
+```
+
+```{r fig.width = 6, fig.height = 5}
+ggplot(tmp, aes(Data_Quality_Category)) +
+  geom_bar(aes(fill = Data_Quality_Type)) +
+  theme(axis.text.x = element_text(angle = 90, size = 14,
+                                   hjust = 1, vjust = 0.25)) +
+  scale_fill_viridis_d(name = 'Data Type') +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("Performance Suggestions")
+
+```
+```{r}
+ggsave('figures/Performance.png', type='cairo',
+         width = 6, height = 5)
+```
+
+```{r fig.width = 6, fig.height = 5}
+ggplot( tmp, aes(Data_Quality_Category)) +
+  geom_bar(aes(fill = Data_Quality_Timing)) +
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  scale_fill_viridis_d(name = 'Timing') +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("Model Performance")
+
+```
+
+## Testing Mosaic Plots
+The `ggmosaic' package allows mosaic plots, but it's a but buggy and hard to
+use.
+
+```{r fig.width = 8, fig.height = 6}
+ggplot(tmp) +
+  geom_mosaic(aes(x = product(Data_Quality_Category), 
+                  fill = Data_Quality_Type)) +
+  scale_fill_viridis_d(name = 'Data Type') +
+  ggtitle("Model Performance") +
+  theme_mosaic() +
+  theme(axis.text.x = element_text(angle = 90, size = 12, 
+                                   hjust = 1, vjust = 0.25),
+          axis.text.y = element_text(size = 12)) +
+  xlab('') +
+  ylab('')
+```
+
+```{r}
+ggsave('figures/Performance Mosaic.png', type='cairo',
+         width = 6, height = 5)
+```
+
+On the whole, what we see is that people commented repeatedly on the need for
+high spatial resolution information, especially with regards to water level,
+inundation, and waves. Many comments also good temporal resolution for water 
+level data - -often associates with forecasting tidal datums for habitat 
+restoration.  Finally, numerous comments focused on geographic extent and 
+model availability, but those comments were usually generic, and not tied to
+specific data needs or requests.
+
+It is possible to layer a third variable into these Mosaic Plots, or to use 
+`ggplot` faceting functions to look at three way contingency tables, but
+in this setting, it's just confusing.  We have too many possible divisions of
+the three variables associated with each performance comment.
+
+# Monitoring Suggestions
+```{r}
+tmp <- the_data %>%
+  select(ID, Monitoring_Data_Group) %>%
+  unique()
+tst <- xtabs(~Monitoring_Data_Group, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+cat("Number of Unique Monitoting Records:\t")
+sum(tst$n)
+```
+
+```{r fig.height = 5, fig.width = 6}
+tmp <- 
+  the_data %>%
+  select(ID, Monitoring_Category, Monitoring_Data_Group) %>%
+  filter(! is.na(Monitoring_Data_Group))  %>%
+  mutate(Monitoring_Data_Group = fct_infreq(Monitoring_Data_Group))
+   
+ggplot(tmp, aes(Monitoring_Data_Group, fill = Monitoring_Category)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  scale_fill_viridis_d(name = 'Comment\nType') +
+  ylab('Count') +
+  xlab("") +
+  ggtitle("Monitoring Comments")
+
+```
+
+```{r}
+ggsave('figures/monitoring.png', type='cairo',
+         width = 6, height = 5)
+```
+
+## What are the "Not Specified" Comments?
+```{r}
+the_data %>%
+  filter(Monitoring_Data_Group == "Not Specified") %>%
+  select(ID, Comment) %>%
+  unique() %>%
+  pull(Comment)
+```
+
+These principally constitute comments on model validation and monitoring 
+methods.

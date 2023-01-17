@@ -1,0 +1,245 @@
+---
+title: "Testing Sankay Charts and other Graphs of Graphs and Trees"
+output: html_notebook
+---
+
+
+
+```{r}
+library(tidyverse)
+library(networkD3)
+```
+
+# Testing The Sankey Charts from `networkD3`
+The following example is modified from a stack overflow post:
+https://stackoverflow.com/questions/52895046/structuring-binary-data-for-sankey-plot/52895853#52895853
+
+## Generate Random Data
+```{r}
+set.seed(900)
+n=100
+example.data<-data.frame(A = rep(1,n),
+                         B = sample(c(0,1),n,replace = TRUE)) %>%
+  mutate(C = sample(c(0,1),n,prob = c(0.3,0.7),replace = TRUE),
+         D = sample(c(0,1),n,prob = c(0.85,0.15),replace = TRUE))
+```
+
+## Pivot data to long form
+```{r}
+events <- example.data %>%
+  mutate(row = row_number()) %>% 
+  pivot_longer(-row, names_to = "column", values_to = "choice" ) %>%
+
+  mutate(column_num = match(column, names(example.data))) %>% 
+  arrange(row, column_num) %>% 
+  select(row, column_num, everything())
+```
+
+## Create "target" and "source" columns
+The coding is based on the knowledge that if you group by row, the first
+item in each row is from column A, and the last was from column D. When you 
+you `lag()` the data within that row, the first item will always be `NA`.
+We end up with "source" values that have `NA` wherever a column A value would
+have been. We then filter out any NAs. I dont believe it is essential to 
+filter out the `NA`s....
+
+What I find weird here is the terminology.  I want the "source" to be to the 
+left, but that's not the way this package is constructed. The on-line help 
+provides no real help in figuring out why.
+
+```{r}
+links1 <-
+  events %>% 
+  mutate(target = paste0(column, "_", choice)) %>% 
+  group_by(row) %>% 
+  mutate(source = lag(target)) %>%
+  ungroup()
+
+links1.1 <- links1 %>% 
+  filter(!is.na(source) & !is.na(target))
+```
+
+```{r}
+links2 <- 
+  links1.1 %>% 
+  select(source, target) %>% 
+  group_by(source, target) %>% 
+  summarise(value = n(), .groups = 'drop') %>% 
+  ungroup()
+```
+
+## Create a Dateframe of Node Names
+At this point we have a Links dataframe, but with text names for each node. The
+`networkD3` package wants nodes identified numerically, with names isolated in
+a separate dataframe. 
+
+I create a dataframe containing names for all the nodes...
+
+```{r}
+nodes <- data.frame(name = unique(c(links2$source, links2$target)))
+```
+
+
+## Generate the Plot
+Finally, I replace all the node string values in links with numeric codes, zero
+indexed.
+
+```{r}
+links3 <- links2 %>%
+  mutate(source = match(source, nodes$name) - 1,
+         target = match(target, nodes$name) - 1)
+
+plt <- sankeyNetwork(Links = links3,
+             Source = "source", Target = "target", Value = "value",
+             Nodes = nodes, 
+             NodeID = "name", nodeWidth = 25, nodePadding = 20,
+             fontSize = 48)
+plt
+```
+
+## Save the Output
+The graphic is not easy to save programmatically.  The save functionality
+produces an HTML widget.  A problem in  `rmarkdown` functions that are actually
+called to generate the saved HTML prevents saving this as a self-contained HTML 
+file.
+
+```{r}
+saveNetwork(plt, file = 'sankay.html', selfcontained = TRUE)
+```
+
+# Testing a Simple Graph from `networkD3`
+`simpleNetwork` Generates a force directed network graph, again as an HTML 
+Widget.  The following example is from the related help page.
+```{r}
+src <- c("A", "A", "A", "A", "B", "B", "C", "C", "D")
+target <- c("B", "C", "D", "J", "E", "F", "G", "H", "I")
+networkData <- data.frame(src, target)
+
+sn <- simpleNetwork(networkData, fontSize = 12)
+sn
+```
+
+# Testing a Hierarchical Tree from `networkD3`
+The following example is from the help file for `diagonalNetwork()`.
+
+`diagonalNetwork()` generates a "Reingold-Tilford Tree" network diagram
+```{r}
+CanadaPC <- list(name = "Canada", children = list(list(name = "Newfoundland",
+                    children = list(list(name = "St. John's"))),
+               list(name = "PEI",
+                    children = list(list(name = "Charlottetown"))),
+               list(name = "Nova Scotia",
+                    children = list(list(name = "Halifax"))),
+               list(name = "New Brunswick",
+                    children = list(list(name = "Fredericton"))),
+               list(name = "Quebec",
+                    children = list(list(name = "Montreal"),
+                                    list(name = "Quebec City"))),
+               list(name = "Ontario",
+                    children = list(list(name = "Toronto"),
+                                    list(name = "Ottawa"))),
+               list(name = "Manitoba",
+                    children = list(list(name = "Winnipeg"))),
+               list(name = "Saskatchewan",
+                    children = list(list(name = "Regina"))),
+               list(name = "Nunavuet",
+                    children = list(list(name = "Iqaluit"))),
+               list(name = "NWT",
+                    children = list(list(name = "Yellowknife"))),
+               list(name = "Alberta",
+                    children = list(list(name = "Edmonton"))),
+               list(name = "British Columbia",
+                    children = list(list(name = "Victoria"),
+                                    list(name = "Vancouver"))),
+               list(name = "Yukon",
+                    children = list(list(name = "Whitehorse")))
+))
+
+diagonalNetwork(List = CanadaPC, fontSize = 10)
+
+```
+
+
+# Testing the `data.tree` Package
+This package handles creation of hierarchical data.
+
+Much of the following is from the package vignettes.
+```{r}
+library('data.tree')
+```
+
+```{r}
+acme <- Node$new("Acme Inc.")
+  accounting <- acme$AddChild("Accounting")
+    software <- accounting$AddChild("New Software")
+    standards <- accounting$AddChild("New Accounting Standards")
+  research <- acme$AddChild("Research")
+    newProductLine <- research$AddChild("New Product Line")
+    newLabs <- research$AddChild("New Labs")
+  it <- acme$AddChild("IT")
+    outsource <- it$AddChild("Outsource")
+    agile <- it$AddChild("Go agile")
+    goToR <- it$AddChild("Switch to R")
+
+print(acme)
+```
+
+Plotting is managed through `DiagrammeR`, which has lots of formatting options.
+`DiagrammeR` is itself builds on `graphviz`
+
+```{r}
+library(DiagrammeR)
+plot(acme)
+```
+
+## Loading Data from the `treemap` package
+```{r}
+library(treemap)
+data(GNI2014)
+head(GNI2014)
+```
+
+## Building a Tree based on that Tabular Data
+```{r}
+GNI2014$pathString <- paste("world", 
+                            GNI2014$continent, 
+                            GNI2014$country, 
+                            sep = "/")
+```
+
+
+The following call o `as.Node()` implicitly calls `FromDataFrameTable()`, where
+a lot of the heavy lifting occurs.
+```{r}
+population <- as.Node(GNI2014)
+print(population, "iso3", "population", "GNI", limit = 20)
+```
+
+
+I also read about the `igraph` package....  `igraph` manages graphs, as in graph 
+theory -- collections of nodes and links. It's a big package. I've just 
+scratched the surface.
+
+```{r}
+library(igraph)
+ig <- as.igraph(acme, directed = TRUE, direction = "climb")
+plot(ig)
+```
+That is plotted with standard R graphics, so export requires opening a graphics 
+device....
+
+```{r}
+print(ig)
+```
+
+
+
+```{r}
+g <- make_ring(10, directed = TRUE, mutual = TRUE)
+plot(g, layout=layout_with_kk, vertex.color="green")
+```
+```{r}
+l <- make_lattice(c(3, 3, 2))
+plot(l)
+```
+
