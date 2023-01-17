@@ -76,7 +76,7 @@ dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
 
 # Load Data
 ```{r}
-the_data <- read_excel("Export_Data_Query.xlsx" ) %>%
+the_data <- read_excel("Data_Export_Query.xlsx" ) %>%
   mutate(ID = as.integer(ID)) %>%
   rename_with(function(x) sub(" Category_Category", '_Category', x)) %>%
   rename_with(function(x) sub(" ", '_', x))
@@ -95,18 +95,20 @@ data_types_table <- read_excel("Data Type.xlsx",
     col_types = c("numeric", "text", "text"))
 ```
 
+##  Numerical Values to Strings
 And finally I correct the data table to all text entries.
-
 ```{r}
 the_data <- the_data %>%
   mutate(Data_Timing = timing_table$Timing[match(Data_Timing, 
                                                  timing_table$ID)],
          Extension_Timing = timing_table$Timing[match(Extension_Timing,
+                                                      timing_table$ID)],
+         Data_Quality_Timing = timing_table$Timing[match(Data_Quality_Timing,
                                                       timing_table$ID)]) %>%
-  mutate(Data_Group = data_types_table$Group[match(Data_Group,
+  mutate(Monitoring_Data_Group = data_types_table$Group[match(Monitoring_Data_Group,
                                                     data_types_table$ID)],
-         Monitoring_Data_Group = data_types_table$Group[match(Monitoring_Data_Group,
-                                                    data_types_table$ID)] )
+         Data_Quality_Type = data_types_table$Group[match(Data_Quality_Type,
+                                                    data_types_table$ID)])
 ```
 
 #A Warning about Uniqueness
@@ -143,13 +145,16 @@ xtabs(~ User_Category + Data_Timing, tmp)
 reduced_data <- the_data %>%
   select(ID, User_Category, Data_Timing) %>%
   unique() %>%
-  filter(! is.na(User_Category), ! is.na(Data_Timing)) %>%
+  filter(! is.na(User_Category), 
+         ! is.na(Data_Timing),
+         User_Category != "Other",      # Dropped because none have timing
+         Data_Timing != 'Unclear') %>%  # Dropped because uninformative.    
   mutate(User_Category = fct_infreq(User_Category),
          Data_Timing = fct_infreq(Data_Timing))
    
   ggplot(reduced_data, aes(User_Category)) +
   geom_bar(aes(fill = Data_Timing)) +
-  theme(axis.text.x = element_text(angle = 90, size = 16,
+  theme(axis.text.x = element_text(angle = 90, size = 14,
                                    hjust = 1, vjust = 0.25)) +
   scale_fill_viridis_d(name = '') +
   ylab('Count') +
@@ -296,6 +301,7 @@ my_sankey <- function(.dat, .left, .right,
 }
 ```
 
+# Generate Sankay Graphics
 ```{r}
 plt <- reduced_data %>%
   my_sankey(User_Category, Data_Timing, final_color = "#9090c0", drop_below = 3)
@@ -343,7 +349,7 @@ ggsave('figures/user_timing_tiles.png', type='cairo',
 # Which Types of Users want Long Term Data?
 ```{r}
 reduced_data %>%
-  filter(Data_Timing == 'Long Term') %>%
+  filter(Data_Timing == 'Pattern or Risk') %>%
   group_by(User_Category) %>%
   summarise(count = n()) %>%
   filter(count>0) %>%
