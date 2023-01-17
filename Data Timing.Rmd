@@ -332,7 +332,7 @@ tmp %>%
   ggplot(aes(Data_Group, Data_Timing, fill = count)) +
   geom_tile() +
   scale_fill_viridis_c(name = '', option = "viridis") +
-  theme(axis.text.x = element_text(angle = 90, size = 16, vjust = 0.25),
+  theme(axis.text.x = element_text(angle = 90, size = 16, hjust = 1, vjust = 0.25),
         axis.text.y = element_text(size = 16),
         panel.background = element_rect(fill = 'grey80')) +
   xlab('') +
