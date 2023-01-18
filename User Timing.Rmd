@@ -103,11 +103,11 @@ the_data <- the_data %>%
                                                  timing_table$ID)],
          Extension_Timing = timing_table$Timing[match(Extension_Timing,
                                                       timing_table$ID)],
-         Data_Quality_Timing = timing_table$Timing[match(Data_Quality_Timing,
+         Performance_Timing = timing_table$Timing[match(Performance_Timing,
                                                       timing_table$ID)]) %>%
   mutate(Monitoring_Data_Group = data_types_table$Group[match(Monitoring_Data_Group,
                                                     data_types_table$ID)],
-         Data_Quality_Type = data_types_table$Group[match(Data_Quality_Type,
+         Performance_Type = data_types_table$Group[match(Performance_Type,
                                                     data_types_table$ID)])
 ```
 

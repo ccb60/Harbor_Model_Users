@@ -18,6 +18,7 @@ output:
 knitr::opts_chunk$set(fig.align = 'center',
                       fig.width = 5, fig.height = 4,
                       collapse = TRUE, comment = "#>")
+#options(tinytex.verbose = TRUE)
 ```
 
 # Introduction
@@ -104,11 +105,11 @@ the_data <- the_data %>%
                                                  timing_table$ID)],
          Extension_Timing = timing_table$Timing[match(Extension_Timing,
                                                       timing_table$ID)],
-         Data_Quality_Timing = timing_table$Timing[match(Data_Quality_Timing,
+         Performance_Timing = timing_table$Timing[match(Performance_Timing,
                                                       timing_table$ID)]) %>%
   mutate(Monitoring_Data_Group = data_types_table$Group[match(Monitoring_Data_Group,
                                                     data_types_table$ID)],
-         Data_Quality_Type = data_types_table$Group[match(Data_Quality_Type,
+         Performance_Type = data_types_table$Group[match(Performance_Type,
                                                     data_types_table$ID)])
 ```
 
@@ -154,6 +155,7 @@ tst <- xtabs(~User_Category, tmp) %>%
 cat("Number of Unique User Records:\t")
 sum(tst$n)
 ```
+
 ```{r fig.height = 5, fig.width = 5}
 tst %>%
   mutate(User_Category = fct_reorder(User_Category, n, .desc = TRUE)) %>%
@@ -196,7 +198,7 @@ tmp %>%
                                    hjust = 1, vjust = 0.25)) +
   ylab('Count') +
   xlab("") +
-  ggtitle("Data Types Requested or Implied")
+  ggtitle("Data Types Mentioned")
 
 ```
 
@@ -294,17 +296,17 @@ the_data %>%
   pull()
 ```
 
-# Data Quality or Model Performance Goals
+# Model Performance
 
 ```{r}
 tmp <- the_data %>%
-  select(ID, Data_Quality_Category, Data_Quality_Type, Data_Quality_Timing) %>%
+  select(ID, Performance_Category, Performance_Type, Performance_Timing) %>%
   unique() %>%
   filter(if_any(starts_with('Data_'), ~!is.na(.)))
 
-xtabs(~  Data_Quality_Type + Data_Quality_Category, data = tmp) %>%
+xtabs(~  Performance_Type + Performance_Category, data = tmp) %>%
   as_tibble() %>%
-  pivot_wider(names_from = Data_Quality_Type, values_from = n) %>%
+  pivot_wider(names_from = Performance_Type, values_from = n) %>%
   mutate(row_tot = rowSums(select(., `Inundation`:`Waves`))) %>%
   arrange(desc(row_tot)) %>%
   knitr::kable()
@@ -316,19 +318,19 @@ because it also occurs as a separate category.
 
 ```{r}
 tmp <- the_data %>%
-  select(ID, Data_Quality_Category, Data_Quality_Type, Data_Quality_Timing) %>%
+  select(ID, Performance_Category, Performance_Type, Performance_Timing) %>%
   unique() %>%
   filter(if_any(starts_with('Data_'), ~!is.na(.))) %>%
-  filter(! is.na(Data_Quality_Category),
-           Data_Quality_Category != "Timing" )  %>%
-  mutate(Data_Quality_Category = fct_infreq(Data_Quality_Category),
-         Data_Quality_Type = fct_infreq(Data_Quality_Type),
-         Data_Quality_Timing = fct_infreq(Data_Quality_Timing))
+  filter(! is.na(Performance_Category),
+           Performance_Category != "Timing" )  %>%
+  mutate(Performance_Category = fct_infreq(Performance_Category),
+         Performance_Type = fct_infreq(Performance_Type),
+         Performance_Timing = fct_infreq(Performance_Timing))
 ```
 
 ```{r fig.width = 6, fig.height = 5}
-ggplot(tmp, aes(Data_Quality_Category)) +
-  geom_bar(aes(fill = Data_Quality_Type)) +
+ggplot(tmp, aes(Performance_Category)) +
+  geom_bar(aes(fill = Performance_Type)) +
   theme(axis.text.x = element_text(angle = 90, size = 14,
                                    hjust = 1, vjust = 0.25)) +
   scale_fill_viridis_d(name = 'Data Type') +
@@ -343,8 +345,8 @@ ggsave('figures/Performance.png', type='cairo',
 ```
 
 ```{r fig.width = 6, fig.height = 5}
-ggplot( tmp, aes(Data_Quality_Category)) +
-  geom_bar(aes(fill = Data_Quality_Timing)) +
+ggplot( tmp, aes(Performance_Category)) +
+  geom_bar(aes(fill = Performance_Timing)) +
   theme(axis.text.x = element_text(angle = 90, size = 16,
                                    hjust = 1, vjust = 0.25)) +
   scale_fill_viridis_d(name = 'Timing') +
@@ -353,42 +355,6 @@ ggplot( tmp, aes(Data_Quality_Category)) +
   ggtitle("Model Performance")
 
 ```
-
-## Testing Mosaic Plots
-The `ggmosaic' package allows mosaic plots, but it's a but buggy and hard to
-use.
-
-```{r fig.width = 8, fig.height = 6}
-ggplot(tmp) +
-  geom_mosaic(aes(x = product(Data_Quality_Category), 
-                  fill = Data_Quality_Type)) +
-  scale_fill_viridis_d(name = 'Data Type') +
-  ggtitle("Model Performance") +
-  theme_mosaic() +
-  theme(axis.text.x = element_text(angle = 90, size = 12, 
-                                   hjust = 1, vjust = 0.25),
-          axis.text.y = element_text(size = 12)) +
-  xlab('') +
-  ylab('')
-```
-
-```{r}
-ggsave('figures/Performance Mosaic.png', type='cairo',
-         width = 6, height = 5)
-```
-
-On the whole, what we see is that people commented repeatedly on the need for
-high spatial resolution information, especially with regards to water level,
-inundation, and waves. Many comments also good temporal resolution for water 
-level data - -often associates with forecasting tidal datums for habitat 
-restoration.  Finally, numerous comments focused on geographic extent and 
-model availability, but those comments were usually generic, and not tied to
-specific data needs or requests.
-
-It is possible to layer a third variable into these Mosaic Plots, or to use 
-`ggplot` faceting functions to look at three way contingency tables, but
-in this setting, it's just confusing.  We have too many possible divisions of
-the three variables associated with each performance comment.
 
 # Monitoring Suggestions
 ```{r}
@@ -431,8 +397,7 @@ ggsave('figures/monitoring.png', type='cairo',
 the_data %>%
   filter(Monitoring_Data_Group == "Not Specified") %>%
   select(ID, Comment) %>%
-  unique() %>%
-  pull(Comment)
+  unique()
 ```
 
 These principally constitute comments on model validation and monitoring 

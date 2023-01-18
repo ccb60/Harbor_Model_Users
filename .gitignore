@@ -2,4 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
-**/figures
+
+figures/*/
+figures/*.html

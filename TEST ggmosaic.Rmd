@@ -1,0 +1,32 @@
+---
+title: "Test Mosaic Plot Knit to PDF"
+date: "2023-01-18"
+output:
+  pdf_document
+---
+Quick document to test rendering to PDF documents.
+
+```{r}
+library(ggmosaic)
+```
+
+```{r}
+ggplot(data = fly) +
+  geom_mosaic(aes(x = product(rude_to_recline), fill=do_you_recline)) +
+  theme_mosaic()
+```
+
+## Resulting Error Message
+```
+output file: TEST-ggmosaic.knit.md
+
+! LaTeX Error: Unicode character ^^[ (U+001B)
+               not set up for use with LaTeX.
+
+Error: LaTeX failed to compile TEST-ggmosaic.tex. See https://yihui.org/tinytex/r/#debugging for debugging tips. See TEST-ggmosaic.log for more info.
+Execution halted
+```
+
+## Further Testing
+The problem does not occur if I assign the plot to a variable, but it **does**
+occur if I then save that plot with `ggsave()`, even without showing the plot.
