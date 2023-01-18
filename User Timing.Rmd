@@ -355,3 +355,33 @@ reduced_data %>%
   filter(count>0) %>%
   pull(User_Category)
 ```
+
+# Users and Information Needs
+```{r fig.width = 6, fig.height = 7}
+reduced_data <- the_data %>%
+  select(ID, User_Category, Data_Group) %>%
+  unique() %>%
+  filter(! is.na(Data_Group), ! is.na(User_Category)) %>%
+  filter(Data_Group != "Unclear") %>%
+  mutate(Data_Group = fct_infreq(Data_Group),
+         User_Category = fct_infreq(User_Category))
+
+ggplot(reduced_data, aes(User_Category)) +
+  geom_bar(aes(fill = Data_Group)) +
+  theme(axis.text.x = element_text(angle = 90, size = 12,
+                                   hjust = 1, vjust = 0.25),
+        axis.text.y = element_text(size = 12),
+        legend.position = 'top') +
+  guides(fill=guide_legend(nrow=3)) +
+  
+  scale_fill_viridis_d(name = '') +
+  ylab('Count') +
+  xlab("User Category") +
+  ggtitle("Information Needs by User")
+```
+
+
+```{r}
+ggsave('figures/user_data_histogram.png', type='cairo',
+         width = 6, height = 7)
+```

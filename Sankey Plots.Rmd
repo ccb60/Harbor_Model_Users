@@ -639,7 +639,7 @@ webshot::webshot('figures/users and interfaces.html',
 ```{r}
 plt <- tmp %>%
   my_sankey(User_Category, Interface_Category, final_color ="#9090a0", 
-            drop_below = 2)
+            drop_below = 3)
 
 plt
 ```
@@ -695,7 +695,7 @@ webshot::webshot('figures/data to timing.html', 'figures/data to timing.png')
 ## Simplified Plot
 ```{r}
 plt <- tmp %>%
-  my_sankey(Data_Group, Data_Timing, final_color ="#9090a0", drop_below = 2)
+  my_sankey(Data_Group, Data_Timing, final_color ="#9090a0", drop_below = 3)
 plt
 ```
 
@@ -724,7 +724,7 @@ webshot::webshot('figures/timing to data.html', 'figures/timing to data.png')
 ## Simplified Plot 
 ```{r}
 plt <- tmp %>%
-  my_sankey(Data_Timing, Data_Group, final_color ="#9090a0", drop_below = 2)
+  my_sankey(Data_Timing, Data_Group, final_color ="#9090a0", drop_below = 3)
 plt
 ```
 

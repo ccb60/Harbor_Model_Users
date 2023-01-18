@@ -132,7 +132,7 @@ the_data %>%
   nrow()
 ```
 
-# Data Types and Data Timing
+# Data Selection (Types and Timing)
 ```{r}
 tmp <- the_data %>%
   select(ID, Data_Group, Data_Timing) %>%
@@ -160,7 +160,7 @@ reduced_data <- the_data %>%
   scale_fill_viridis_d(name = 'Timing') +
   ylab('Count') +
   xlab("") +
-  ggtitle("Data Types and Timing")
+  ggtitle("Information Needs")
 
 ```
 
@@ -302,10 +302,10 @@ my_sankey <- function(.dat, .left, .right,
 ```
 
 
-
+# BUild Sankay Plot
 ```{r}
 plt <- reduced_data %>%
-  my_sankey(Data_Group, Data_Timing, final_color = "#9090c0", drop_below = 4)
+  my_sankey(Data_Group, Data_Timing, final_color = "#9090c0", drop_below = 3)
 plt
 ```
 

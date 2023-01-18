@@ -198,7 +198,7 @@ tmp %>%
                                    hjust = 1, vjust = 0.25)) +
   ylab('Count') +
   xlab("") +
-  ggtitle("Data Types Mentioned")
+  ggtitle("Information Needs")
 
 ```
 
@@ -231,7 +231,7 @@ tmp %>%
                                    hjust = 1, vjust = 0.25)) +
   ylab('Count') +
   xlab("") +
-  ggtitle("Additional Models or Model Extensions Implied")
+  ggtitle("Models Needed to Address Needs")
 ```
 
 ```{r}
@@ -373,18 +373,17 @@ sum(tst$n)
 tmp <- 
   the_data %>%
   select(ID, Monitoring_Category, Monitoring_Data_Group) %>%
-  filter(! is.na(Monitoring_Data_Group))  %>%
+  filter(! is.na(Monitoring_Data_Group),)  %>%
   mutate(Monitoring_Data_Group = fct_infreq(Monitoring_Data_Group))
    
 ggplot(tmp, aes(Monitoring_Data_Group, fill = Monitoring_Category)) +
   geom_bar() +
   theme(axis.text.x = element_text(angle = 90, size = 16,
                                    hjust = 1, vjust = 0.25)) +
-  scale_fill_viridis_d(name = 'Comment\nType') +
+  scale_fill_viridis_d(name = 'Suggestion\nType') +
   ylab('Count') +
   xlab("") +
-  ggtitle("Monitoring Comments")
-
+  ggtitle("Monitoring Suggestions")
 ```
 
 ```{r}

@@ -189,12 +189,15 @@ graphic and then displays it.
 the_mosaic <- ggplot(tmp) +
   geom_mosaic(aes(x = product(Performance_Category), 
                   fill = Performance_Type)) +
-  scale_fill_viridis_d(name = 'Data Type') +
-  ggtitle("Model Performance") +
+  scale_fill_viridis_d(name = '') +
+  ggtitle("Information Needs") +
   theme_mosaic() +
-  theme(axis.text.x = element_text(angle = 90, size = 12, 
+  theme(axis.text.x = element_text(angle = 90, size = 10, 
                                    hjust = 1, vjust = 0.25),
-          axis.text.y = element_text(size = 12)) +
+          axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = 'top') +
+  guides(fill=guide_legend(nrow=3)) +
   xlab('') +
   ylab('')
 
@@ -209,7 +212,7 @@ the_mosaic
 
 ``` r
 ggsave('figures/Performance_Mosaic.png', the_mosaic, type='cairo',
-         width = 6, height = 5)
+         width = 6, height = 7)
 ```
 
 On the whole, what we see is that people commented repeatedly on the
@@ -275,5 +278,5 @@ the_mosaic
 
 ``` r
 ggsave('figures/User_Needs_Mosaic.png', the_mosaic, type='cairo',
-         width = 6, height = 5)
+         width = 6, height = 7)
 ```
