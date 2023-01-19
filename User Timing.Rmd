@@ -1,5 +1,5 @@
 ---
-title: "Analysis of Data and Model Timing"
+title: "Analysis of User Groups and Model Timing"
 author: "Curtis C. Bohlen"
 date: "2023-01-18"
 output:
@@ -141,7 +141,7 @@ tmp <- the_data %>%
 xtabs(~ User_Category + Data_Timing, tmp)
 ```
 
-```{r fig.width = 7, fig.height = 5}
+```{r fig.width = 7, fig.height = 6}
 reduced_data <- the_data %>%
   select(ID, User_Category, Data_Timing) %>%
   unique() %>%
@@ -154,12 +154,12 @@ reduced_data <- the_data %>%
    
   ggplot(reduced_data, aes(User_Category)) +
   geom_bar(aes(fill = Data_Timing)) +
-  theme(axis.text.x = element_text(angle = 90, size = 14,
+  theme(axis.text.x = element_text(angle = 90, size = 12,
                                    hjust = 1, vjust = 0.25)) +
   scale_fill_viridis_d(name = '') +
   ylab('Count') +
   xlab("") +
-  ggtitle("Data")
+  ggtitle("Time Domain of Information Needs")
 
 ```
 
@@ -301,7 +301,8 @@ my_sankey <- function(.dat, .left, .right,
 }
 ```
 
-# Generate Sankay Graphics
+# User Category to Timing
+
 ```{r}
 plt <- reduced_data %>%
   my_sankey(User_Category, Data_Timing, final_color = "#9090c0", drop_below = 3)
@@ -310,12 +311,19 @@ plt
 
 ```{r}
 saveNetwork(plt, file = 'figures/user timing.html', selfcontained = TRUE)
-webshot::webshot('figures/user timing.html', 'figures/data timing.png')
+webshot::webshot('figures/user timing.html', 'figures/user timing.png')
 ```
 
+# Timing to User Category
 ```{r}
 reduced_data %>%
   my_sankey(Data_Timing, User_Category, final_color = "#9090c0", drop_below = 3)
+```
+
+
+```{r}
+saveNetwork(plt, file = 'figures/timing to user.html', selfcontained = TRUE)
+webshot::webshot('figures/user timing.html', 'figures/timing to user.png')
 ```
 
 # Matrix Plot

@@ -336,7 +336,7 @@ ggplot(tmp, aes(Performance_Category)) +
   scale_fill_viridis_d(name = 'Data Type') +
   ylab('Count') +
   xlab("") +
-  ggtitle("Performance Suggestions")
+  ggtitle("Performance Needs")
 
 ```
 ```{r}

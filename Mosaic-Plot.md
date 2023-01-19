@@ -190,7 +190,7 @@ the_mosaic <- ggplot(tmp) +
   geom_mosaic(aes(x = product(Performance_Category), 
                   fill = Performance_Type)) +
   scale_fill_viridis_d(name = '') +
-  ggtitle("Information Needs") +
+  ggtitle("Performance Needs") +
   theme_mosaic() +
   theme(axis.text.x = element_text(angle = 90, size = 10, 
                                    hjust = 1, vjust = 0.25),

@@ -302,7 +302,7 @@ my_sankey <- function(.dat, .left, .right,
 ```
 
 
-# BUild Sankay Plot
+# Build Sankay Plot
 ```{r}
 plt <- reduced_data %>%
   my_sankey(Data_Group, Data_Timing, final_color = "#9090c0", drop_below = 3)
@@ -316,7 +316,6 @@ webshot::webshot('figures/data timing.html', 'figures/data timing.png')
 ```
 
 # Matrix Plot
-
 The idea here is to make a visual matrix, tiled with colors
 ```{r}
 tmp <- reduced_data %>%
