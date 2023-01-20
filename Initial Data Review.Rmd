@@ -207,6 +207,39 @@ ggsave('figures/data.png', type='cairo',
          width = 6, height = 6)
 ```
 
+# Data Timing
+```{r}
+tmp <- the_data %>%
+  select(ID, Data_Timing) %>%
+  unique()
+tst <- xtabs(~Data_Timing, tmp) %>%
+  sort(decreasing = TRUE) %>%
+  as_tibble()
+
+
+cat("Number of Unique Timing Records:\t")
+sum(tst$n)
+```
+
+```{r fig.height = 5, fig.width = 5}
+tst %>%
+  mutate(Data_Timing = fct_reorder(Data_Timing, n, .desc = TRUE)) %>%
+  
+  ggplot(aes(Data_Timing, n)) +
+  geom_col(fill = "blue4") +
+  theme(axis.text.x = element_text(angle = 90, size = 16,
+                                   hjust = 1, vjust = 0.25)) +
+  ylab('Count') +
+  xlab("") +
+  ggtitle('Information Timing')
+```
+
+```{r}
+ggsave('figures/timing.png', type='cairo',
+         width = 6, height = 6)
+```
+
+
 # Model Extensions
 ```{r}
 tmp <- the_data %>%
