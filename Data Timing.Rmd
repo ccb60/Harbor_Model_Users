@@ -157,7 +157,7 @@ reduced_data <- the_data %>%
   theme(axis.text.x = element_text(angle = 90, size = 16,
                                    hjust = 1, vjust = 0.25),
         axis.text.y = element_text(size = 14)) +
-  scale_fill_viridis_d(name = 'Timing') +
+  scale_fill_viridis_d(name = 'Timing', option = 'G', end = 0.75) +
   ylab('Count') +
   xlab("") +
   ggtitle("Information Needs")
@@ -328,7 +328,7 @@ tmp %>%
  # filter(count > 2) %>%
   ggplot(aes(Data_Group, Data_Timing, fill = count)) +
   geom_tile() +
-  scale_fill_viridis_c(name = '', option = "viridis") +
+  scale_fill_viridis_c(name = '', option = "A", end = 0.8) +
   theme(axis.text.x = element_text(angle = 90, size = 16, hjust = 1, vjust = 0.25),
         axis.text.y = element_text(size = 16),
         panel.background = element_rect(fill = 'grey80')) +

@@ -382,7 +382,7 @@ ggplot( tmp, aes(Performance_Category)) +
   geom_bar(aes(fill = Performance_Timing)) +
   theme(axis.text.x = element_text(angle = 90, size = 16,
                                    hjust = 1, vjust = 0.25)) +
-  scale_fill_viridis_d(name = 'Timing') +
+  scale_fill_viridis_d(name = 'Timing', option = "G") +
   ylab('Count') +
   xlab("") +
   ggtitle("Model Performance")
@@ -398,7 +398,7 @@ tst <- xtabs(~Monitoring_Data_Group, tmp) %>%
   sort(decreasing = TRUE) %>%
   as_tibble()
 
-cat("Number of Unique Monitoting Records:\t")
+cat("Number of Unique Monitoring Records:\t")
 sum(tst$n)
 ```
 
@@ -413,7 +413,7 @@ ggplot(tmp, aes(Monitoring_Data_Group, fill = Monitoring_Category)) +
   geom_bar() +
   theme(axis.text.x = element_text(angle = 90, size = 16,
                                    hjust = 1, vjust = 0.25)) +
-  scale_fill_viridis_d(name = 'Suggestion\nType') +
+  scale_fill_viridis_d(name = 'Suggestion\nType', option = "G", end = 0.5) +
   ylab('Count') +
   xlab("") +
   ggtitle("Monitoring Suggestions")

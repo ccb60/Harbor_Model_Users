@@ -156,7 +156,7 @@ reduced_data <- the_data %>%
   geom_bar(aes(fill = Data_Timing)) +
   theme(axis.text.x = element_text(angle = 90, size = 12,
                                    hjust = 1, vjust = 0.25)) +
-  scale_fill_viridis_d(name = '') +
+  scale_fill_viridis_d(name = '', option = 'G', end = 0.7) +
   ylab('Count') +
   xlab("") +
   ggtitle("Time Domain of Information Needs")
@@ -339,7 +339,7 @@ tmp %>%
  # filter(count > 2) %>%
   ggplot(aes(User_Category, Data_Timing, fill = count)) +
   geom_tile() +
-  scale_fill_viridis_c(name = '', option = "viridis") +
+  scale_fill_viridis_c(name = '', option = "A", end = 0.8) +
   theme(axis.text.x = element_text(angle = 90, size = 16, hjust = 1, vjust = 0.25),
         axis.text.y = element_text(size = 16),
         panel.background = element_rect(fill = 'grey80')) +
