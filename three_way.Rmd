@@ -1,0 +1,453 @@
+---
+title: "Three-step Sankay Plots of Workshop Comments"
+author: "Curtis C. Bohlen"
+date: "2023-01-18"
+output:
+  pdf_document:
+    toc: true
+    toc_depth: 2
+    fig_width: 5
+    fig_height: 4
+---
+
+<img
+    src="https://www.cascobayestuary.org/wp-content/uploads/2014/04/logo_sm.jpg"
+    style="position:absolute;top:100px;right:50px;" />
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(fig.align = 'center',
+                      fig.width = 5, fig.height = 4,
+                      collapse = TRUE, comment = "#>")
+```
+
+# Introduction
+CBEP recently received a grant from NSF's CIVIC Innovation Challenge to work on 
+developing hydrodynamic models that address community needs in Portland Harbor.
+As part of the project, CBEP hosted three community workshops in November of
+2022.
+
+Facilitators produced both "live" notes during the meeting -- visible to all on
+a screen at the front of the meeting room -- and detailed meeting transcripts.
+CBEP staff then reviewed those notes paragraph by paragraph, and coded each 
+paragraph in terms of six characteristics:
+
+*  Potential users and uses of hydrodynamic models,
+
+*  Data or information needs identified by community members,
+
+*  Implied extensions of the initial Casco Bay Model required to fully address
+   those data needs, and
+   
+*  Ideas for improving communications of model results (e.g., communications 
+   channels and user interface design),
+
+*  Specifications for model performance or capabilities such as resolution,
+   geographic coverage or ability to conduct simulations.
+
+*  Suggestions about monitoring or data collection that could improve
+   information availability.
+
+If a paragraph or live note included something relevant to one or more of
+these categories, we summarized the related idea, and then assigned each
+paragraph or comment to categories. In this way we cn look at what ideas were 
+expressed most commonly during the workshops.
+
+Of course, not all paragraphs include information related to each of the five 
+types of information, so there is not a perfect one-to-one correspondence 
+between categories.
+
+In this R Notebook, I explore these data by looking at a three-way relations
+between users, time domains, and information needs.  one goal is to identify 
+nodes of shared importance to different users that might help define 
+
+# Load Packages
+```{r}
+library(tidyverse)
+library(readxl)
+library(networkD3)  #an alternative might be the riverplot package
+
+theme_set(theme_classic())
+```
+
+# Create Figures Folder
+```{r}
+dir.create(file.path(getwd(), 'figures'), showWarnings = FALSE)
+```
+
+# Load Data
+```{r}
+the_data <- read_excel("Data_Export_Query.xlsx" ) %>%
+  mutate(ID = as.integer(ID)) %>%
+  rename_with(function(x) sub(" Category_Category", '_Category', x)) %>%
+  rename_with(function(x) sub(" ", '_', x))
+head(the_data)
+```
+
+Our coding was generated in a somewhat sloppy `Access` database, and because of
+the way SQL works, it is easier to replace numerical values for some groups
+here, in `R`, rather than before we exported the data from `Access`. I read in
+the dictionaries here.
+
+```{r}
+timing_table <- read_excel("Timing Category.xlsx", 
+    col_types = c("numeric", "text", "text"))
+data_types_table <- read_excel("Data Type.xlsx", 
+    col_types = c("numeric", "text", "text"))
+```
+
+##  Numerical Values to Strings
+And finally I correct the data table to all text entries.
+```{r}
+the_data <- the_data %>%
+  mutate(Data_Timing = timing_table$Timing[match(Data_Timing, 
+                                                 timing_table$ID)],
+         Extension_Timing = timing_table$Timing[match(Extension_Timing,
+                                                      timing_table$ID)],
+         Performance_Timing = timing_table$Timing[match(Performance_Timing,
+                                                      timing_table$ID)]) %>%
+  mutate(Monitoring_Data_Group = data_types_table$Group[match(Monitoring_Data_Group,
+                                                    data_types_table$ID)],
+         Performance_Type = data_types_table$Group[match(Performance_Type,
+                                                    data_types_table$ID)])
+```
+
+
+#A Warning about Uniqueness
+We have to be careful here, because each note or comment can be represented in 
+this data table multiple times. Each paragraph in the meeting transcript might 
+imply several different users, for example.  But if there are multiple users and
+multiple data types, the records got duplicated (in part) in the SQL query.  So 
+for any analysis, we need to test for uniqueness of the data. always
+
+We actually have over 400 records, built out of just over 200 unique comments.
+
+```{r}
+cat("All rows in the data:\t\t")
+nrow(the_data)
+
+cat("Unique comments reviewed:\t")
+the_data %>%
+  select(ID) %>%
+  unique() %>%
+  nrow()
+```
+
+# Sankay Plot Methods
+
+We need to create a network data set, which has to identify links between notes
+by `Source`, `Target` and `Value`.  The `sankeyNetwork()` function from the 
+`networkD3` package on which we rely wants the data in a very specific format. 
+
+*  It wants to define NODES via a data frame of node labels (and, optionally,
+   node groups that can be used to assign colors to nodes).
+
+*  It wants to define links via a data frame containing NUMERIC (integer?)
+   values identifying nodes. The data frame can also include data on link groups
+   for assigning colors to links.
+
+*  The integers defining each node must match the order of those
+   nodes in the nodes data frame.  
+
+## Data Wrangling
+For clarity, I break the data wrangling up into discrete steps. That simplifies 
+both explanation and checking intermediate results.  
+
+First, we select the user,timing, and data information. 
+
+We are headed for a display that shown User or Use groups on the left, timing 
+in hte middle, and Data groups on the right.  Both User and Data classifications 
+included a category called simply "Other", for comments that clearly articulated 
+a data request that  I could not figure out how to categorize.  
+
+Sankey plots need not be unidirectional, so logically, nodes are neither
+sources nor targets.  If I use the same name for both the "User Other" and the
+"Data Other" categories, the package sees them as the same category, which has
+unintended effects on plot geometry (since we can then have "Other" as either or
+both a source or a target.
+
+To avoid that problem, we have to edit the category names so the two "Other"
+categories don't look equivalent.
+
+Finally, we convert the (string) data to factors, and sort them in decreasing 
+order of frequency, which may help with later graphic design.
+
+```{r}
+reduced_data <- the_data %>%
+  select(ID, User_Category, Data_Timing, Data_Group) %>%
+  filter(! is.na(User_Category)) %>%
+  filter(! is.na(Data_Group)) %>%
+  mutate(User_Category = if_else(User_Category == 'Other',
+                                      'Other User', User_Category),
+         Data_Timing = if_else(Data_Timing == 'Unclear', 
+                               "Unspecified", Data_Timing),
+         Data_Group = if_else(Data_Group == 'Other',
+                                      'Other Data',Data_Group)) %>%
+  mutate(User_Category = if_else(User_Category == 'Water Quality',
+                                      'Water Quality User', User_Category),
+         Data_Group = if_else(Data_Group == 'Water Quality',
+                                      'Water Quality Data',Data_Group)) %>%
+  mutate(User_Category = fct_infreq(User_Category),
+         Data_Group = fct_infreq(Data_Group)) %>%
+  unique()
+```
+
+We next calculate the number of links between each pair of source and target
+nodes.
+
+```{r}
+user_to_timing_link_num <- reduced_data %>%
+  group_by(User_Category, Data_Timing) %>%
+  summarize(weight = n(), 
+            .groups = 'drop') %>%
+  rename(from = User_Category,
+         to = Data_Timing)
+
+timing_to_Data_link_num <- reduced_data %>%
+  group_by(Data_Timing, Data_Group) %>%
+  summarize(weight = n(), 
+            .groups = 'drop') %>%
+  rename(from = Data_Timing,
+         to = Data_Group )
+
+my_links <- bind_rows(user_to_timing_link_num, timing_to_Data_link_num)
+```
+
+I create a data frame of nodes, that includes  a `groups` variable, to allow me 
+to control the color of the nodes in the diagram.
+
+```{r}
+nodes <- tibble(node_name = c(unique(as.character(user_to_timing_link_num$from)),
+                              unique(as.character(user_to_timing_link_num$to)),
+                              unique(as.character(timing_to_Data_link_num$to))
+                              ),
+                groups = c(rep("A", length(unique(user_to_timing_link_num$from))),
+                           rep("B", length(unique(user_to_timing_link_num$to))),
+                           rep("C", length(unique(c(timing_to_Data_link_num$to))))))
+```
+
+Then we have to convert the character string values in our links data frame 
+(`my_links`) to zero-valued numerical IDs, as required by the `networkD3` 
+package. 
+
+`match()` here is a quick way of implicitly extracting the row number of a 
+matching record from each vector (column) in the `tmp2` data frame.
+
+```{r}
+the_links <- my_links %>%
+  mutate(link_group = if_else(to %in% user_to_timing_link_num$to,
+                              to, from),
+         from = match(from, nodes$node_name) - 1,
+         to = match(to, nodes$node_name) - 1)
+
+```
+
+## Initial Graphic
+```{r}
+plt <- sankeyNetwork(Links = the_links,
+             Source = "from",
+             Target = "to",
+             Value = "weight",
+             Nodes = nodes,
+             NodeID = "node_name",
+             NodeGroup = 'groups',
+             height = 800,
+             fontSize = 12,
+             iterations = 0)
+plt
+```
+
+## Custom Colors
+It might be nice to color the nodes or links according to categories.
+This is surprisingly difficult, because the package uses one color scale for 
+both notes and links. 
+
+I found it hard to figure out how colors were ordered, and then found it hard to
+assemble the correct color specification as required for `network3D`.
+
+I generate new node group names.  For the "Source" nodes, we use the name of the 
+user category.  For the "Target" nodes, we use an arbitrary string, here `"B"`.
+
+```{r}
+nodes <- tibble(node_name = c(unique(as.character(user_to_timing_link_num$from)),
+                              unique(as.character(user_to_timing_link_num$to)),
+                              unique(as.character(timing_to_Data_link_num$to))
+                              ),
+                groups = c(rep("A", length(unique(user_to_timing_link_num$from))),
+                           rep("B", length(unique(user_to_timing_link_num$to))),
+                           rep("C", length(unique(c(timing_to_Data_link_num$to))))))
+```
+
+
+```{r}
+users <- unique(as.character(user_to_timing_link_num$from))
+timing <- unique(as.character(user_to_timing_link_num$to))
+types <- unique(as.character(timing_to_Data_link_num$to))
+
+nodes <- tibble(node_name = c(users, timing, types),
+                groups = c(users,
+                           rep("None", length(timing)),
+                           types))
+```
+
+
+We want the links to match the color of the source nodes, so we  specify
+matching color group names for links based on the source (here, left hand) 
+nodes.
+
+```{r}
+the_links <- my_links %>%
+  mutate(link_group = if_else(to %in% timing_to_Data_link_num$to,
+                              to, from),
+         from = match(from, nodes$node_name) - 1,
+         to = match(to, nodes$node_name) - 1)
+
+```
+
+
+Now I have to define my color palette.  This is more work than it should be
+because you have to encapsulate a D3 graphics command in a string so that
+the `sankeyNetwork()` function can pass it on to the underlying Java / D3
+code.
+
+I wrote a function to handle the details.
+
+### Function to Define Color String
+
+```{r}
+d3_colors <- function(link_names) {
+  #left_names is a vector of string node labels used for the source nodes.
+  #right.name is the name for the (single) target node group.
+  #final_color is a string defining a color for the right (target) nodes.
+  
+  grps <- length(link_names)
+  
+  range <- sample(hcl.colors(grps, palette = "viridis"), grps, 
+                    replace = FALSE)
+  cols <- tibble(d = link_names, r = range)
+  the_colors <- paste0('d3.scaleOrdinal() .domain(["', 
+                       paste(cols$d, collapse='", "'), 
+                       '"]) .range(["',
+                       paste(cols$r, collapse='", "'),
+                       '"])')
+  return(the_colors)
+}
+```
+
+```{r}
+d3_colors(c("cat", "dog", "squirrel"))
+```
+
+### Revised Graphic
+```{r}
+the_colors <- d3_colors(nodes$node_name)
+```
+
+
+```{r}
+plt <- sankeyNetwork(Links = the_links,
+             Source = "from",
+             Target = "to",
+             Value = "weight",
+             LinkGroup = "link_group",
+             NodeGroup = "groups",
+             Nodes = nodes,
+             NodeID = "node_name",
+             colourScale = the_colors,
+             nodeWidth = 5,
+             nodePadding = 10,
+             height = 700,
+             fontSize = 12,
+             fontFamily = 'Montserrat ExtraBold',
+             iterations = 0)
+plt
+```
+
+
+## Simplified Graphic
+```{r}
+threshold <- 4
+
+user_to_timing_link_num <- reduced_data %>%
+  group_by(User_Category, Data_Timing) %>%
+  summarize(weight = n(), 
+            .groups = 'drop') %>%
+  rename(from = User_Category,
+         to = Data_Timing) %>%
+  filter(weight >= threshold) %>%
+  filer()
+
+timing_to_Data_link_num <- reduced_data %>%
+  group_by(Data_Timing, Data_Group) %>%
+  summarize(weight = n(), 
+            .groups = 'drop') %>%
+  rename(from = Data_Timing,
+         to = Data_Group ) %>%
+  filter(weight >= threshold)
+
+my_links <- bind_rows(user_to_timing_link_num, timing_to_Data_link_num)
+```
+
+```{r}
+nodes <- tibble(node_name = c(unique(as.character(user_to_timing_link_num$from)),
+                              unique(as.character(user_to_timing_link_num$to)),
+                              unique(as.character(timing_to_Data_link_num$to))
+                              ),
+                groups = c(rep("A", length(unique(user_to_timing_link_num$from))),
+                           rep("B", length(unique(user_to_timing_link_num$to))),
+                           rep("C", length(unique(c(timing_to_Data_link_num$to))))))
+```
+
+```{r}
+users <- unique(as.character(user_to_timing_link_num$from))
+timing <- unique(as.character(user_to_timing_link_num$to))
+types <- unique(as.character(timing_to_Data_link_num$to))
+
+nodes <- tibble(node_name = c(users, timing, types),
+                groups = c(users,
+                           rep("None", length(timing)),
+                           types))
+```
+
+
+```{r}
+the_links <- my_links %>%
+  mutate(link_group = if_else(to %in% timing_to_Data_link_num$to,
+                              to, from),
+         from = match(from, nodes$node_name) - 1,
+         to = match(to, nodes$node_name) - 1)
+```
+
+```{r}
+the_colors <- d3_colors(nodes$node_name)
+```
+
+
+```{r}
+plt <- sankeyNetwork(Links = the_links,
+             Source = "from",
+             Target = "to",
+             Value = "weight",
+             LinkGroup = "link_group",
+             NodeGroup = "groups",
+             Nodes = nodes,
+             NodeID = "node_name",
+             colourScale = the_colors,
+             nodeWidth = 5,
+             nodePadding = 10,
+             height = 700,
+             fontSize = 12,
+             fontFamily = 'Montserrat ExtraBold',
+             iterations = 0)
+plt
+```
+
+
+That did not quite work because of tha rarity of requests for the recent past and for 
+unspecified timing.
+
+```{r}
+saveNetwork(plt, file = 'figures/threeway.html', 
+            selfcontained = TRUE)
+webshot::webshot('figures/treeway.html', 
+                 'figures/treeway.png')
+```
